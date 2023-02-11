@@ -11,7 +11,6 @@
 #define MAX_REQUEST_LEN 2000
 
 void send_request(const char *method, const char *url);
-char *get_inpt();
 char *getFileType(char *file);
 int ReadHttpStatus(int sock);
 int ParseHeader(int sock);
@@ -61,7 +60,7 @@ int main()
         else if (strcmp(mthd, "PUT") == 0)
         {
             // printf("ITS PUT\n");
-            // send_request("PUT", req , putheader, 13, "text/plain", "Hello, World!");
+            send_request("PUT", req);
         }
         else
         {
@@ -150,7 +149,7 @@ void send_request(const char *method, const char *url)
         while (filename[i] != '/')
             filename--;
         filename++;
-        // printf("%s\n",filename);
+  
 
         send(client_socket, request, strlen(request), 0);
 
@@ -184,13 +183,14 @@ void send_request(const char *method, const char *url)
         if(fork()==0)
         {
             execlp("xdg-open", "xdg-open", filename, NULL);
-            return 0;
+            exit(1);
         }
 
     }
     else if (strcmp(method, "PUT") == 0)
     {
-        // need to implement
+
+        printf("PUT not implemented yet LOL\n");
     }
     close(client_socket);
 }
@@ -200,7 +200,7 @@ int parseS(int sock)
     char c;
     char buff[1024] = "", *ptr = buff + 1;
     int bytes_received, status;
-    // printf("Begin Response ..\n");
+
     while (bytes_received = recv(sock, ptr, 1, 0))
     {
         if (bytes_received == -1)
@@ -219,18 +219,17 @@ int parseS(int sock)
     sscanf(ptr, "%*s %d ", &status);
 
     printf("%s\n", ptr);
-    // printf("status=%d\n",status);
-    // printf("End Response ..\n");
+
     return (bytes_received > 0) ? status : 0;
 }
 
-// the only filed that it parsed is 'Content-Length'
+
 int ParseH(int sock)
 {
     char c;
     char buff[1024] = "", *ptr = buff + 4;
     int bytes_received, status;
-    // printf("Begin HEADER ..\n");
+
     while (bytes_received = recv(sock, ptr, 1, 0))
     {
         if (bytes_received == -1)
@@ -246,7 +245,6 @@ int ParseH(int sock)
 
     *ptr = 0;
     ptr = buff + 4;
-    // printf("%s",ptr);
 
     if (bytes_received)
     {
@@ -256,10 +254,9 @@ int ParseH(int sock)
             sscanf(ptr, "%*s %d", &bytes_received);
         }
         else
-            bytes_received = -1; // unknown size
+            bytes_received = -1; 
 
-        //    printf("Content-Length: %d\n",bytes_received);
     }
-    // printf("End HEADER ..\n");
+    
     return bytes_received;
 }
