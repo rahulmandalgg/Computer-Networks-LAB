@@ -17,7 +17,7 @@ char *getFileType(char *file);
 int main()
 {
     char *temp;
-    char *req = (char *)malloc(sizeof(char) * MAX_REQUEST_LEN);
+    
     char *getheader = (char*)malloc(sizeof(char)*MAX_REQUEST_LEN);
     char *putheader = "Host: www.ag.com\r\nConnection: Keep-Alive\r\nAccept: text/plain\r\nAccept-Language: en-US\r\nContent-Type: text/plain\r\n";
     char *mthd = (char *)malloc(sizeof(char) * 3);
@@ -29,9 +29,10 @@ int main()
     int i = 0;
     while (1)
     {
+        char *req = (char *)malloc(sizeof(char) * MAX_REQUEST_LEN);
         printf("MyBrowser> ");
         req = get_inpt();
-        // printf("%s\n", req);
+        //printf("%s\n", req);
 
         for (int i = 0; i < 3; i++)
         {
@@ -61,6 +62,8 @@ int main()
         {
             printf("Invalid request\n");
         }
+
+        free(req);
     }
 
     return 0;
@@ -103,9 +106,11 @@ char *getFileType(char *file)
 void send_request(const char *method, const char *url, const char *headers, int content_length, const char *content_type, const char *content)
 {
     char *typ;
+    char *type;
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
     char *got;
     char *ip=(char *)malloc(sizeof(char)*20);
+    char request[MAX_REQUEST_LEN];
     if (client_socket < 0)
     {
         printf("Error creating client socket\n");
@@ -121,21 +126,27 @@ void send_request(const char *method, const char *url, const char *headers, int 
         }
         url = url + i;
         //printf("%s\n",url);
-        char *type=url + strlen(url) -5;
+        type=url + strlen(url) - 5;
         typ=getFileType(type);
 
         sprintf(headers, "Host: %s\r\nConnection: close\r\nDate:\r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nContent-length: 0\r\n", ip,typ);
 
         //printf("%s\n",headers);
 
-        char request[MAX_REQUEST_LEN];
+        
         sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
-        //printf("%s", request);
+        printf("%s", request);
     }
     else if(strcmp(method,"PUT")==0)
     {
         //need to implement
     }
+    int i=0;
+    char *filename=type;
+    while(filename[i] != '/') filename--;
+    filename++;
+    //printf("%s\n",filename);
+    
 
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
@@ -151,48 +162,60 @@ void send_request(const char *method, const char *url, const char *headers, int 
 
     printf("Connected to server\n");
 
-    char request[MAX_REQUEST_LEN];
     
-    // if (content_length > 0)
-    // {
-    //     sprintf(request, "%sContent-Length: %d\r\n", request, content_length);
-    //     sprintf(request, "%sContent-Type: %s\r\n", request, content_type);
-    //     sprintf(request, "%s\r\n%s", request, content);
-    // }
-
-    printf("%s", request);
+    
     send(client_socket, request, strlen(request), 0);
 
     char response[100];
     int flag = 0;
     int k=0;
-    got = (char *)malloc((100) * sizeof(char));
-    // recv(client_socket, got, MAX_REQUEST_LEN - 1, 0);
-    // strcpy(response,got);
-    // recv(client_socket, got, MAX_REQUEST_LEN - 1, 0);
-    // strcat(response, got);
+    
+    got = (char *)malloc(sizeof(char)*100);
 
     while(1)
     {
         bzero(response,100);
         int bytes_received = recv(client_socket, response, 100, 0);
-        if(bytes_received == 0) break;
-        else 
-        {
-            got=(char *)realloc(got,(k+100)*sizeof(char));
-        }
-        // printf("%d",bytes_received);
         
-        for (int i = 0; i < 100; i++)
+        for(int i=0;i<100;i++)
         {
+            
             got[k] = response[i];
             k++;
+            if(response[i] == '\r' && response[i+1] == '\n' && response[i+2] == '\r' && response[i+3] == '\n') 
+            {
+                flag=1;
+                break;
+            }
         }
-        
+        if(flag==1) break;
+        else got=(char *)realloc(got,sizeof(char)*(k+100));
+    }
+    
+    printf("%s\n",got);
+    while(response [i-3] != '\r' && response[i-2] != '\n' && response[i-1] != '\r' && response[i] != '\n') i++;
+    //printf("%s",(response+i+3));
+
+    FILE *fp = fopen(filename,"w");
+
+    if (fp)
+    {
+	   fprintf(fp,"%s",(response+i+3));
     }
 
-    got[k] = '\0';
-    printf("%s\n", got);
 
-    close(client_socket);
+    while(1)
+    {
+        bzero(response,100);
+        int bytes_received = recv(client_socket, response, 100, 0);
+        if(bytes_received <= 0) break;
+        fprintf(fp,"%s",response);
+        //printf("%s",response);
+    }
+    fclose(fp);
+    //printf("---%d---\n", strlen(got));
+
+    // close(client_socket);
+
+
 }
