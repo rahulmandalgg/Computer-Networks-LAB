@@ -11,6 +11,7 @@
 #define MAX_REQUEST_LEN 2000
 
 void send_request(const char *method, const char *url);
+char *get_inpt();
 char *getFileType(char *file);
 int ReadHttpStatus(int sock);
 int ParseHeader(int sock);
@@ -108,6 +109,7 @@ void send_request(const char *method, const char *url)
         printf("Error creating client socket\n");
         return;
     }
+
     if (strcmp(method, "GET") == 0)
     {
         int i = 0;
@@ -129,61 +131,67 @@ void send_request(const char *method, const char *url)
         // printf("Requesting %s from %s\n", url, ip);
         sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
         // printf("%s", request);
+
+        struct sockaddr_in server_address;
+        server_address.sin_family = AF_INET;
+        server_address.sin_port = htons(PORT);
+        server_address.sin_addr.s_addr = inet_addr(ip);
+
+        if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
+        {
+            printf("Error connecting to server\n");
+            return;
+        }
+
+        printf("Connected to server\n");
+
+        i = 0;
+        char *filename = type;
+        while (filename[i] != '/')
+            filename--;
+        filename++;
+        // printf("%s\n",filename);
+
+        send(client_socket, request, strlen(request), 0);
+
+        char response[100];
+        int flag = 0;
+        int k = 0;
+        int contentlength = 0;
+        int bytes_received = 0;
+
+        if (parseS(client_socket) && (contentlength = ParseH(client_socket)))
+        {
+
+            int bytes = 0;
+            FILE *fd = fopen(filename, "wb");
+
+            while (bytes_received = recv(client_socket, response, 100, 0))
+            {
+                if (bytes_received == -1)
+                {
+                    perror("recieve");
+                    exit(3);
+                }
+
+                fwrite(response, 1, bytes_received, fd);
+                bytes += bytes_received;
+                if (bytes == contentlength)
+                    break;
+            }
+            fclose(fd);
+        }
+        if(fork()==0)
+        {
+            execlp("xdg-open", "xdg-open", filename, NULL);
+            return 0;
+        }
+
     }
     else if (strcmp(method, "PUT") == 0)
     {
         // need to implement
     }
-    int i = 0;
-    char *filename = type;
-    while (filename[i] != '/')
-        filename--;
-    filename++;
-    // printf("%s\n",filename);
-
-    struct sockaddr_in server_address;
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(PORT);
-    server_address.sin_addr.s_addr = inet_addr(ip);
-
-    if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
-    {
-        printf("Error connecting to server\n");
-        return;
-    }
-
-    printf("Connected to server\n");
-
-    send(client_socket, request, strlen(request), 0);
-
-    char response[100];
-    int flag = 0;
-    int k = 0;
-    int contentlength = 0;
-    int bytes_received = 0;
-
-    if (parseS(client_socket) && (contentlength = ParseH(client_socket)))
-    {
-
-        int bytes = 0;
-        FILE *fd = fopen(filename, "wb");
-
-        while (bytes_received = recv(client_socket, response, 100, 0))
-        {
-            if (bytes_received == -1)
-            {
-                perror("recieve");
-                exit(3);
-            }
-
-            fwrite(response, 1, bytes_received, fd);
-            bytes += bytes_received;
-            if (bytes == contentlength)
-                break;
-        }
-        fclose(fd);
-    }
-
     close(client_socket);
 }
 
