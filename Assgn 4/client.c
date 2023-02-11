@@ -11,7 +11,6 @@
 #define MAX_REQUEST_LEN 2000
 
 void send_request(const char *method, const char *url);
-char *get_inpt();
 char *getFileType(char *file);
 int ReadHttpStatus(int sock);
 int ParseHeader(int sock);
@@ -26,16 +25,24 @@ int main()
     int i = 0;
     while (1)
     {
-        char *req = (char *)malloc(sizeof(char) * MAX_REQUEST_LEN);
+
+        char reql[200];
         printf("MyBrowser> ");
-        req = get_inpt();
-        //printf("%s\n", req);
+
+        scanf("%[^\n]s", reql);
+        getchar();
+
+        // printf("%s\n", reql);
+
+        char *req = reql;
+
+        // printf("%s\n", req);
 
         for (int i = 0; i < 3; i++)
         {
             mthd[i] = req[i];
         }
-        // printf("%s", mthd);
+        // printf("%s\n", mthd);
 
         if ((temp = strstr(req, "http://")) != NULL)
         {
@@ -59,45 +66,29 @@ int main()
         {
             printf("Invalid request\n");
         }
-
-        free(req);
+        bzero(reql, 200);
     }
 
     return 0;
 }
 
-char *get_inpt()
-{
-    char *req = (char *)malloc(sizeof(char) * MAX_REQUEST_LEN);
-    int i = 0;
-    while (1)
-    {
-        char c = getchar();
-        if (c == '\n')
-            break;
-        req[i] = c;
-        i++;
-    }
-
-    return req;
-}
-
 char *getFileType(char *file)
 {
-  char *temp;
-  if ((temp = strstr(file, ".html")) != NULL)
-  {
-    return "text/html";
-  }
-  else if ((temp = strstr(file, ".pdf")) != NULL)
-  {
-    return "application/pdf";
-  }
-  else if ((temp = strstr(file, ".jpeg")) != NULL)
-  {
-    return "image/jpeg";
-  }
-  else return "text/*";
+    char *temp;
+    if ((temp = strstr(file, ".html")) != NULL)
+    {
+        return "text/html";
+    }
+    else if ((temp = strstr(file, ".pdf")) != NULL)
+    {
+        return "application/pdf";
+    }
+    else if ((temp = strstr(file, ".jpg")) != NULL)
+    {
+        return "image/jpeg";
+    }
+    else
+        return "text/*";
 }
 
 void send_request(const char *method, const char *url)
@@ -132,11 +123,10 @@ void send_request(const char *method, const char *url)
         type = url + strlen(url) - 5;
         typ = getFileType(type);
 
-        sprintf(headers, "Host: %s\r\nConnection: close\r\nDate:\r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nContent-length: 0\r\n", ip,typ);
+        sprintf(headers, "Host: %s\r\nConnection: close\r\nDate:\r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nContent-length: 0\r\n", ip, typ);
 
-        //printf("%s\n",headers);
-
-        
+        // printf("%s\n",headers);
+        // printf("Requesting %s from %s\n", url, ip);
         sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
         // printf("%s", request);
     }
@@ -168,23 +158,27 @@ void send_request(const char *method, const char *url)
 
     char response[100];
     int flag = 0;
-    int k=0;
-    
-    got = (char *)malloc(sizeof(char)*100);
+    int k = 0;
+    int contentlength = 0;
+    int bytes_received = 0;
 
-    while(1)
+    if (parseS(client_socket) && (contentlength = ParseH(client_socket)))
     {
-        bzero(response,100);
-        int bytes_received = recv(client_socket, response, 100, 0);
-        
-        for(int i=0;i<100;i++)
+
+        int bytes = 0;
+        FILE *fd = fopen(filename, "wb");
+
+        while (bytes_received = recv(client_socket, response, 100, 0))
         {
-            
-            got[k] = response[i];
-            k++;
-            if(response[i] == '\r' && response[i+1] == '\n' && response[i+2] == '\r' && response[i+3] == '\n') 
+            if (bytes_received == -1)
             {
-                flag=1;
+                perror("recieve");
+                exit(3);
+            }
+
+            fwrite(response, 1, bytes_received, fd);
+            bytes += bytes_received;
+            if (bytes == contentlength)
                 break;
         }
         fclose(fd);
@@ -206,15 +200,21 @@ int parseS(int sock)
             perror("Error in Reading HTTP Status");
             exit(1);
         }
-        if(flag==1) break;
-        else got=(char *)realloc(got,sizeof(char)*(k+100));
-    }
-    
-    printf("%s\n",got);
-    while(response [i-3] != '\r' && response[i-2] != '\n' && response[i-1] != '\r' && response[i] != '\n') i++;
-    //printf("%s",(response+i+3));
 
-    FILE *fp = fopen(filename,"w");
+        if ((ptr[-1] == '\r') && (*ptr == '\n'))
+            break;
+        ptr++;
+    }
+    *ptr = 0;
+    ptr = buff + 1;
+
+    sscanf(ptr, "%*s %d ", &status);
+
+    printf("%s\n", ptr);
+    // printf("status=%d\n",status);
+    // printf("End Response ..\n");
+    return (bytes_received > 0) ? status : 0;
+}
 
 // the only filed that it parsed is 'Content-Length'
 int ParseH(int sock)
@@ -225,22 +225,33 @@ int ParseH(int sock)
     // printf("Begin HEADER ..\n");
     while (bytes_received = recv(sock, ptr, 1, 0))
     {
-	   fprintf(fp,"%s",(response+i+3));
+        if (bytes_received == -1)
+        {
+            perror("Parse Header");
+            exit(1);
+        }
+
+        if ((ptr[-3] == '\r') && (ptr[-2] == '\n') && (ptr[-1] == '\r') && (*ptr == '\n'))
+            break;
+        ptr++;
     }
 
+    *ptr = 0;
+    ptr = buff + 4;
+    // printf("%s",ptr);
 
-    while(1)
+    if (bytes_received)
     {
-        bzero(response,100);
-        int bytes_received = recv(client_socket, response, 100, 0);
-        if(bytes_received <= 0) break;
-        fprintf(fp,"%s",response);
-        //printf("%s",response);
+        ptr = strstr(ptr, "Content-Length:");
+        if (ptr)
+        {
+            sscanf(ptr, "%*s %d", &bytes_received);
+        }
+        else
+            bytes_received = -1; // unknown size
+
+        //    printf("Content-Length: %d\n",bytes_received);
     }
-    fclose(fp);
-    //printf("---%d---\n", strlen(got));
-
-    // close(client_socket);
-
-
+    // printf("End HEADER ..\n");
+    return bytes_received;
 }
