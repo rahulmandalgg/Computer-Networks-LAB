@@ -10,6 +10,7 @@
 
 #define PORT 80
 #define MAX_REQUEST_LEN 2000
+#define BUFSIZE 2048
 
 void send_request(const char *method, const char *url, int port);
 char *getFileType(char *file);
@@ -140,10 +141,10 @@ void send_request(const char *method, const char *url, int port)
         type = url + strlen(url) - 5;
         typ = getFileType(type);
 
-        gettime(date,30,0);
-        gettime(ifdate,30,-2);
-        sprintf(headers, "Host: %s\r\nConnection: close\r\nDate: \r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nIf-Modified-Since: \r\nContent-length: 0\r\n", ip, date, typ, ifdate);
- 
+        gettime(date, 30, 0);
+        gettime(ifdate, 30, -2);
+        // sprintf(headers, "Host: %s\r\nConnection: close\r\nDate: %s\r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nIf-Modified-Since: %s\r\n", ip, date, typ, ifdate);
+        sprintf(headers, "Host: %s\r\nConnection: close\r\nDate: \r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nIf-Modified-Since: \r\n", ip, typ);
         // printf("%s\n",headers);
         // printf("Requesting %s from %s\n", url, ip);
         sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
@@ -172,7 +173,7 @@ void send_request(const char *method, const char *url, int port)
         while (filename[i] != '/')
             filename--;
         filename++;
-
+        
         send(client_socket, request, strlen(request), 0);
 
         char response[100];
@@ -231,34 +232,80 @@ void send_request(const char *method, const char *url, int port)
 
         typ = getFileType(type);
 
+        i = 0;
+        char *filename = type;
+        while (filename[i] != '/')
+            filename--;
+        filename++;
+        // printf("%s\n", filename);
         // printf("%s\n", url);
-        gettime(date, 30,0);
+
+        FILE *file;
+
+        // Open the PDF file
+        file = fopen(filename, "rb");
+        if (file == NULL)
+        {
+            printf("Error opening file\n");
+            return 1;
+        }
+
+        // Get the size of the file
+        fseek(file, 0, SEEK_END);
+        int file_size = ftell(file);
+        rewind(file);
+        // printf("%d", file_size);
+
+        gettime(date, 30, 0);
         // printf("%s\n", date);
-        sprintf(headers, "Host: %s\r\nConnection: close\r\nDate:%s\r\nContent-length:\r\nContent-type:%s", ip, date, typ);
+        sprintf(headers, "Host: %s\r\nAccept: %s\r\nConnection: close\r\nDate: %s\r\nContent-length: %d\r\nContent-type: %s\r\nContent-language: en-US\r\n\r\n", ip,typ, date, file_size, typ);
 
         // printf("%s\n",headers);
         // printf("Requesting %s from %s\n", url, ip);
         sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
         printf("%s", request);
 
-        // struct sockaddr_in server_address;
-        // server_address.sin_family = AF_INET;
-        // if (port == 0)
-        //     server_address.sin_port = htons(PORT);
-        // else
-        //     server_address.sin_port = htons(port);
-        // server_address.sin_addr.s_addr = inet_addr(ip);
+        struct sockaddr_in server_address;
+        server_address.sin_family = AF_INET;
+        if (port == 0)
+            server_address.sin_port = htons(PORT);
+        else
+            server_address.sin_port = htons(port);
+        server_address.sin_addr.s_addr = inet_addr(ip);
 
-        // // printf("PORT: %d\n",htons(server_address.sin_port));
+        // printf("PORT: %d\n",htons(server_address.sin_port));
 
-        // if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
-        // {
-        //     printf("Error connecting to server\n");
-        //     return;
-        // }
+        if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
+        {
+            printf("Error connecting to server\n");
+            return;
+        }
 
-        // printf("Connected to server\n");
+        printf("Connected to server\n");
+
+        send(client_socket, request, strlen(request), 0);
+
+        int remaining=file_size;
+        char buffer[BUFSIZE];
+        while (remaining > 0)
+        {
+            bzero(buffer, BUFSIZE);
+            int to_send = (remaining > BUFSIZE) ? BUFSIZE : remaining;
+            
+            fread(buffer, to_send, 1, file);
+            // printf("%s\n", buffer);
+            if (send(client_socket, buffer, to_send, 0) < 0)
+            {
+                printf("Send failed");
+                return 1;
+            }
+            remaining -= to_send;
+        }
+
+        parseS(client_socket);
     }
+    
+
     close(client_socket);
 }
 
@@ -322,7 +369,7 @@ int ParseH(int sock)
         else
             bytes_received = -1;
     }
-
+    // printf("bytes recieved: %d\n",bytes_received);
     return bytes_received;
 }
 
