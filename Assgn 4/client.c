@@ -12,7 +12,7 @@
 #define MAX_REQUEST_LEN 2000
 #define BUFSIZE 2048
 
-void send_request(const char *method, const char *url, int port);
+void send_request(const char *method, const char *url);
 char *getFileType(char *file);
 int ReadHttpStatus(int sock);
 int ParseHeader(int sock);
@@ -21,17 +21,17 @@ int http_response_date_now(char *buf, size_t buf_len);
 
 int main()
 {
-    char *temp, *temp1;
+    
 
     // char *putheader = "Host: www.ag.com\r\nConnection: Keep-Alive\r\nAccept: text/plain\r\nAccept-Language: en-US\r\nContent-Type: text/plain\r\n";
     char *mthd = (char *)malloc(sizeof(char) * 3);
-    int port = 0;
+    char *temp;
     int i = 0;
     while (1)
     {
 
         char reql[200];
-        printf("MyBrowser> ");
+        printf("MyOwnBrowser> ");
 
         scanf("%[^\n]s", reql);
         getchar();
@@ -53,29 +53,19 @@ int main()
             req = temp;
             req += 7;
         }
-        // printf("%s\n",req);
-        if ((temp1 = strstr(req, ":")) != NULL)
-        {
-            // printf("ITS PORT\n");
-            // printf("%s\n",temp1);
-            *temp1 = NULL;
-            temp1 = temp1 + 1;
-            // printf("%s\n",temp1);
-            port = atoi(temp1);
-        }
-        // printf("%s\n",req);
+       
         // printf("%d\n",port);
         // printf("%s\n",req);
 
         if (strcmp(mthd, "GET") == 0)
         {
             // printf("ITS GET\n");
-            send_request("GET", req, port);
+            send_request("GET", req);
         }
         else if (strcmp(mthd, "PUT") == 0)
         {
             // printf("ITS PUT\n");
-            send_request("PUT", req, port);
+            send_request("PUT", req);
         }
         else
         {
@@ -106,17 +96,19 @@ char *getFileType(char *file)
         return "text/*";
 }
 
-void send_request(const char *method, const char *url, int port)
+void send_request(const char *method, const char *url)
 {
     char *typ;
     char *type;
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
     char *got;
     char headers[500];
+    int port = 0;
     char date[30];
     char ifdate[30];
     char ip[20];
     char request[MAX_REQUEST_LEN];
+    char *temp, *temp1;
     bzero(request, MAX_REQUEST_LEN);
     bzero(headers, 500);
     bzero(ip, 20);
@@ -128,6 +120,16 @@ void send_request(const char *method, const char *url, int port)
 
     if (strcmp(method, "GET") == 0)
     {
+        if ((temp1 = strstr(url, ":")) != NULL)
+        {
+            // printf("ITS PORT\n");
+            // printf("%s\n",temp1);
+            *temp1 = NULL;
+            temp1 = temp1 + 1;
+            // printf("%s\n",temp1);
+            port = atoi(temp1);
+        }
+        
         int i = 0;
         while (url[i] != '/')
         {
@@ -138,9 +140,12 @@ void send_request(const char *method, const char *url, int port)
         // printf("%s\n",url);
         // printf("%s\n",ip);
         // printf("%s\n",headers);
+
+        // printf("%s\n",url);
+
         type = url + strlen(url) - 5;
         typ = getFileType(type);
-
+        // printf("%s\n",type);
         gettime(date, 30, 0);
         gettime(ifdate, 30, -2);
         // sprintf(headers, "Host: %s\r\nConnection: close\r\nDate: %s\r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nIf-Modified-Since: %s\r\n", ip, date, typ, ifdate);
@@ -148,7 +153,7 @@ void send_request(const char *method, const char *url, int port)
         // printf("%s\n",headers);
         // printf("Requesting %s from %s\n", url, ip);
         sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
-        printf("%s", request);
+        // printf("%s", request);
 
         struct sockaddr_in server_address;
         server_address.sin_family = AF_INET;
@@ -173,7 +178,7 @@ void send_request(const char *method, const char *url, int port)
         while (filename[i] != '/')
             filename--;
         filename++;
-        
+        // printf("%s\n", filename);
         send(client_socket, request, strlen(request), 0);
 
         char response[100];
@@ -211,38 +216,61 @@ void send_request(const char *method, const char *url, int port)
     }
     else if (strcmp(method, "PUT") == 0)
     {
-
-        // printf("PUT not implemented yet LOL\n");
+        char *port1;
         int i = 0;
+        char *ptr=url;
+        char *filename;
         while (url[i] != '/')
         {
             ip[i] = url[i];
             i++;
         }
         url = url + i;
+        i=0;
+        if((temp = strstr(url, ":")) != NULL)
+        {
+            port1 = temp+1;
+            *temp = NULL;
+            while(temp[i] != ' ') i++;
+            filename=temp+i+1;
+            temp[i] = '\0';
+            temp++;
+            port = atoi(temp);
+            // printf("%s\n",temp);
+            char *tmp = url;
+            // printf("%s\n", filename);
+            strcat(tmp,"/");
+            tmp[strlen(tmp)] = '\0';
+            strcat(tmp,filename);
+            tmp[strlen(tmp)] = '\0';
+            filename=filename-5;
+        }
+        else
+        {
+            while(ptr[i] != ' ') i++;
+            filename=ptr+i+1;
+            ptr[i]= '/';
+
+        }
+
+        type = url + strlen(url) - 5;
+        typ = getFileType(type);
+        // printf("%s\n",typ);
+        // printf("%d\n",port);
+        // printf("%s\n", filename);
+        // printf("%s\n", url);
+
+        
         // printf("%s\n",url);
         // printf("%s\n",ip);
-        // printf("%s\n",headers);
         i = 0;
-        char *ptr = url;
-        while (ptr[i] != ' ')
-            i++;
-        ptr[i] = '/';
-        type = ptr + strlen(ptr) - 5;
+        // printf("%s\n",url);
 
-        typ = getFileType(type);
-
-        i = 0;
-        char *filename = type;
-        while (filename[i] != '/')
-            filename--;
-        filename++;
-        // printf("%s\n", filename);
+        
         // printf("%s\n", url);
 
         FILE *file;
 
-        // Open the PDF file
         file = fopen(filename, "rb");
         if (file == NULL)
         {
@@ -250,7 +278,6 @@ void send_request(const char *method, const char *url, int port)
             return 1;
         }
 
-        // Get the size of the file
         fseek(file, 0, SEEK_END);
         int file_size = ftell(file);
         rewind(file);
@@ -270,7 +297,7 @@ void send_request(const char *method, const char *url, int port)
         if (port == 0)
             server_address.sin_port = htons(PORT);
         else
-            server_address.sin_port = htons(port);
+            server_address.sin_port = htons(port1);
         server_address.sin_addr.s_addr = inet_addr(ip);
 
         // printf("PORT: %d\n",htons(server_address.sin_port));
