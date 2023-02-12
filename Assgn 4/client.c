@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -10,19 +11,20 @@
 #define PORT 80
 #define MAX_REQUEST_LEN 2000
 
-void send_request(const char *method, const char *url);
-char *get_inpt();
+void send_request(const char *method, const char *url, int port);
 char *getFileType(char *file);
 int ReadHttpStatus(int sock);
 int ParseHeader(int sock);
+void http_response_date(char *buf, size_t buf_len, struct tm *tm);
+int http_response_date_now(char *buf, size_t buf_len);
 
 int main()
 {
-    char *temp;
+    char *temp, *temp1;
 
     // char *putheader = "Host: www.ag.com\r\nConnection: Keep-Alive\r\nAccept: text/plain\r\nAccept-Language: en-US\r\nContent-Type: text/plain\r\n";
     char *mthd = (char *)malloc(sizeof(char) * 3);
-
+    int port = 0;
     int i = 0;
     while (1)
     {
@@ -50,18 +52,29 @@ int main()
             req = temp;
             req += 7;
         }
-
+        // printf("%s\n",req);
+        if ((temp1 = strstr(req, ":")) != NULL)
+        {
+            // printf("ITS PORT\n");
+            // printf("%s\n",temp1);
+            *temp1 = NULL;
+            temp1 = temp1 + 1;
+            // printf("%s\n",temp1);
+            port = atoi(temp1);
+        }
+        // printf("%s\n",req);
+        // printf("%d\n",port);
         // printf("%s\n",req);
 
         if (strcmp(mthd, "GET") == 0)
         {
             // printf("ITS GET\n");
-            send_request("GET", req);
+            send_request("GET", req, port);
         }
         else if (strcmp(mthd, "PUT") == 0)
         {
             // printf("ITS PUT\n");
-            // send_request("PUT", req , putheader, 13, "text/plain", "Hello, World!");
+            send_request("PUT", req, port);
         }
         else
         {
@@ -92,13 +105,15 @@ char *getFileType(char *file)
         return "text/*";
 }
 
-void send_request(const char *method, const char *url)
+void send_request(const char *method, const char *url, int port)
 {
     char *typ;
     char *type;
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
     char *got;
     char headers[500];
+    char date[30];
+    char ifdate[30];
     char ip[20];
     char request[MAX_REQUEST_LEN];
     bzero(request, MAX_REQUEST_LEN);
@@ -125,17 +140,24 @@ void send_request(const char *method, const char *url)
         type = url + strlen(url) - 5;
         typ = getFileType(type);
 
-        sprintf(headers, "Host: %s\r\nConnection: close\r\nDate:\r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nContent-length: 0\r\n", ip, typ);
-
+        gettime(date,30,0);
+        gettime(ifdate,30,-2);
+        sprintf(headers, "Host: %s\r\nConnection: close\r\nDate: \r\nAccept: %s\r\nAccept-Language: en-US, en;q=0.9\r\nIf-Modified-Since: \r\nContent-length: 0\r\n", ip, date, typ, ifdate);
+ 
         // printf("%s\n",headers);
         // printf("Requesting %s from %s\n", url, ip);
         sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
-        // printf("%s", request);
+        printf("%s", request);
 
         struct sockaddr_in server_address;
         server_address.sin_family = AF_INET;
-        server_address.sin_port = htons(PORT);
+        if (port == 0)
+            server_address.sin_port = htons(PORT);
+        else
+            server_address.sin_port = htons(port);
         server_address.sin_addr.s_addr = inet_addr(ip);
+
+        // printf("PORT: %d\n",htons(server_address.sin_port));
 
         if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
         {
@@ -150,7 +172,6 @@ void send_request(const char *method, const char *url)
         while (filename[i] != '/')
             filename--;
         filename++;
-        // printf("%s\n",filename);
 
         send(client_socket, request, strlen(request), 0);
 
@@ -171,7 +192,7 @@ void send_request(const char *method, const char *url)
                 if (bytes_received == -1)
                 {
                     perror("recieve");
-                    exit(3);
+                    exit(1);
                 }
 
                 fwrite(response, 1, bytes_received, fd);
@@ -181,16 +202,62 @@ void send_request(const char *method, const char *url)
             }
             fclose(fd);
         }
-        if(fork()==0)
+        if (fork() == 0)
         {
             execlp("xdg-open", "xdg-open", filename, NULL);
-            return 0;
+            exit(1);
         }
-
     }
     else if (strcmp(method, "PUT") == 0)
     {
-        // need to implement
+
+        // printf("PUT not implemented yet LOL\n");
+        int i = 0;
+        while (url[i] != '/')
+        {
+            ip[i] = url[i];
+            i++;
+        }
+        url = url + i;
+        // printf("%s\n",url);
+        // printf("%s\n",ip);
+        // printf("%s\n",headers);
+        i = 0;
+        char *ptr = url;
+        while (ptr[i] != ' ')
+            i++;
+        ptr[i] = '/';
+        type = ptr + strlen(ptr) - 5;
+
+        typ = getFileType(type);
+
+        // printf("%s\n", url);
+        gettime(date, 30,0);
+        // printf("%s\n", date);
+        sprintf(headers, "Host: %s\r\nConnection: close\r\nDate:%s\r\nContent-length:\r\nContent-type:%s", ip, date, typ);
+
+        // printf("%s\n",headers);
+        // printf("Requesting %s from %s\n", url, ip);
+        sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
+        printf("%s", request);
+
+        // struct sockaddr_in server_address;
+        // server_address.sin_family = AF_INET;
+        // if (port == 0)
+        //     server_address.sin_port = htons(PORT);
+        // else
+        //     server_address.sin_port = htons(port);
+        // server_address.sin_addr.s_addr = inet_addr(ip);
+
+        // // printf("PORT: %d\n",htons(server_address.sin_port));
+
+        // if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
+        // {
+        //     printf("Error connecting to server\n");
+        //     return;
+        // }
+
+        // printf("Connected to server\n");
     }
     close(client_socket);
 }
@@ -200,7 +267,7 @@ int parseS(int sock)
     char c;
     char buff[1024] = "", *ptr = buff + 1;
     int bytes_received, status;
-    // printf("Begin Response ..\n");
+
     while (bytes_received = recv(sock, ptr, 1, 0))
     {
         if (bytes_received == -1)
@@ -219,18 +286,16 @@ int parseS(int sock)
     sscanf(ptr, "%*s %d ", &status);
 
     printf("%s\n", ptr);
-    // printf("status=%d\n",status);
-    // printf("End Response ..\n");
+
     return (bytes_received > 0) ? status : 0;
 }
 
-// the only filed that it parsed is 'Content-Length'
 int ParseH(int sock)
 {
     char c;
     char buff[1024] = "", *ptr = buff + 4;
     int bytes_received, status;
-    // printf("Begin HEADER ..\n");
+
     while (bytes_received = recv(sock, ptr, 1, 0))
     {
         if (bytes_received == -1)
@@ -246,7 +311,6 @@ int ParseH(int sock)
 
     *ptr = 0;
     ptr = buff + 4;
-    // printf("%s",ptr);
 
     if (bytes_received)
     {
@@ -256,10 +320,24 @@ int ParseH(int sock)
             sscanf(ptr, "%*s %d", &bytes_received);
         }
         else
-            bytes_received = -1; // unknown size
-
-        //    printf("Content-Length: %d\n",bytes_received);
+            bytes_received = -1;
     }
-    // printf("End HEADER ..\n");
+
     return bytes_received;
 }
+
+void gettime(char *buff, int len, int ofset)
+{
+    time_t current_time;
+    struct tm *time_info;
+
+    time(&current_time);
+    time_info = gmtime(&current_time);
+
+    time_info->tm_mday += ofset;
+
+    // strftime(time_string, sizeof(time_string), "%a, %d %b %Y %T GMT", time_info);
+    current_time = mktime(time_info);
+    strftime(buff, len, "%a, %d %b %Y %T GMT", time_info);
+}
+
