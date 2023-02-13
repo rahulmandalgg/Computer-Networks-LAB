@@ -15,10 +15,9 @@
 
 void send_request(const char *method, const char *url);
 char *getFileType(char *file);
-int ReadHttpStatus(int sock);
-int ParseHeader(int sock);
-void http_response_date(char *buf, size_t buf_len, struct tm *tm);
-int http_response_date_now(char *buf, size_t buf_len);
+int parseS(int sock);
+int ParseH(int sock);
+void gettime(char *buff, int len, int ofset);
 
 int main()
 {
