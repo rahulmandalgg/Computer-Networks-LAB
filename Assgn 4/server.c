@@ -100,6 +100,7 @@ int main()
         printf("Socket creation(Server): Failed");
         exit(0);
     }
+    printf("Socket creation(Server): Success\n");
 
     serveraddr.sin_family       = AF_INET;
     serveraddr.sin_port         = htons(PORT);
@@ -110,12 +111,13 @@ int main()
 		printf("Unable to bind local address\n");
 		exit(0);
 	}
+    printf("Binding: Success\n");
 
     listen(sockfd,5);
 
     int clientlength = sizeof(clientaddr);
     newsockfd = accept(sockfd, (struct sockaddr *) &clientaddr, &clientlength);
-
+    printf("Connection accepted\n");
     int recsize,command_length=0;
     char* string;
     strcpy(string,"");
@@ -202,5 +204,5 @@ int main()
     }
     log_access(inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
     
-
+    close(newsockfd);
 }
