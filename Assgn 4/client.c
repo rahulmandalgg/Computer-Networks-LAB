@@ -40,6 +40,10 @@ int main()
         char *req = reql;
 
         // printf("%s\n", req);
+        if(strcmp(req,"QUIT")==0)
+        {
+            exit(0);
+        }
 
         for (int i = 0; i < 3; i++)
         {
