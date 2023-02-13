@@ -198,7 +198,7 @@ int main()
     //             return 1;
     //         }
     //         sprintf(modif, "%s", ctime(&st.st_mtime));
-    //         sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\nLast-Modified: %s\r\n\r\n%s",header_res,type,modif,content);
+    //         sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\r\nLast-Modified: %s\r\n\r\n%s",header_res,type,modif,content);
     //         send(newsockfd, response, strlen(response), 0);
     //     }
     //     else
