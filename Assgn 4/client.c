@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <netdb.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -21,7 +22,6 @@ int http_response_date_now(char *buf, size_t buf_len);
 
 int main()
 {
-    
 
     // char *putheader = "Host: www.ag.com\r\nConnection: Keep-Alive\r\nAccept: text/plain\r\nAccept-Language: en-US\r\nContent-Type: text/plain\r\n";
     char *mthd = (char *)malloc(sizeof(char) * 3);
@@ -53,7 +53,7 @@ int main()
             req = temp;
             req += 7;
         }
-       
+
         // printf("%d\n",port);
         // printf("%s\n",req);
 
@@ -129,7 +129,7 @@ void send_request(const char *method, const char *url)
             // printf("%s\n",temp1);
             port = atoi(temp1);
         }
-        
+
         int i = 0;
         while (url[i] != '/')
         {
@@ -165,6 +165,11 @@ void send_request(const char *method, const char *url)
 
         // printf("PORT: %d\n",htons(server_address.sin_port));
 
+        struct pollfd fdset[1]; // poll
+        int timeout = 3000, ret;
+        fdset[0].fd = client_socket;
+        fdset[0].events = POLLIN;
+
         if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
         {
             printf("Error connecting to server\n");
@@ -187,38 +192,46 @@ void send_request(const char *method, const char *url)
         int contentlength = 0;
         int bytes_received = 0;
 
-        if (parseS(client_socket) && (contentlength = ParseH(client_socket)))
+        int polval = poll(fdset,1,timeout);                                                                                    //polling
+        if(polval > 0) 
         {
-
-            int bytes = 0;
-            FILE *fd = fopen(filename, "wb");
-
-            while (bytes_received = recv(client_socket, response, 100, 0))
+            if (parseS(client_socket) && (contentlength = ParseH(client_socket)))
             {
-                if (bytes_received == -1)
-                {
-                    perror("recieve");
-                    exit(1);
-                }
 
-                fwrite(response, 1, bytes_received, fd);
-                bytes += bytes_received;
-                if (bytes == contentlength)
-                    break;
+                int bytes = 0;
+                FILE *fd = fopen(filename, "wb");
+
+                while (bytes_received = recv(client_socket, response, 100, 0))
+                {
+                    if (bytes_received == -1)
+                    {
+                        perror("recieve");
+                        exit(1);
+                    }
+
+                    fwrite(response, 1, bytes_received, fd);
+                    bytes += bytes_received;
+                    if (bytes == contentlength)
+                        break;
+                }
+                fclose(fd);
             }
-            fclose(fd);
+            if (fork() == 0)
+            {
+                execlp("xdg-open", "xdg-open", filename, NULL);
+                exit(1);
+            }
         }
-        if (fork() == 0)
+        else
         {
-            execlp("xdg-open", "xdg-open", filename, NULL);
-            exit(1);
+            printf("Timeout\n");
         }
     }
     else if (strcmp(method, "PUT") == 0)
     {
         char *port1;
         int i = 0;
-        char *ptr=url;
+        char *ptr = url;
         char *filename;
         while (url[i] != '/')
         {
@@ -226,31 +239,32 @@ void send_request(const char *method, const char *url)
             i++;
         }
         url = url + i;
-        i=0;
-        if((temp = strstr(url, ":")) != NULL)
+        i = 0;
+        if ((temp = strstr(url, ":")) != NULL)
         {
-            port1 = temp+1;
+            port1 = temp + 1;
             *temp = NULL;
-            while(temp[i] != ' ') i++;
-            filename=temp+i+1;
+            while (temp[i] != ' ')
+                i++;
+            filename = temp + i + 1;
             temp[i] = '\0';
             temp++;
             port = atoi(temp);
             // printf("%s\n",temp);
             char *tmp = url;
             // printf("%s\n", filename);
-            strcat(tmp,"/");
+            strcat(tmp, "/");
             tmp[strlen(tmp)] = '\0';
-            strcat(tmp,filename);
+            strcat(tmp, filename);
             tmp[strlen(tmp)] = '\0';
-            filename=filename-5;
+            filename = filename - 5;
         }
         else
         {
-            while(ptr[i] != ' ') i++;
-            filename=ptr+i+1;
-            ptr[i]= '/';
-
+            while (ptr[i] != ' ')
+                i++;
+            filename = ptr + i + 1;
+            ptr[i] = '/';
         }
 
         type = url + strlen(url) - 5;
@@ -260,13 +274,11 @@ void send_request(const char *method, const char *url)
         // printf("%s\n", filename);
         // printf("%s\n", url);
 
-        
         // printf("%s\n",url);
         // printf("%s\n",ip);
         i = 0;
         // printf("%s\n",url);
 
-        
         // printf("%s\n", url);
 
         FILE *file;
@@ -285,12 +297,12 @@ void send_request(const char *method, const char *url)
 
         gettime(date, 30, 0);
         // printf("%s\n", date);
-        sprintf(headers, "Host: %s\r\nAccept: %s\r\nConnection: close\r\nDate: %s\r\nContent-length: %d\r\nContent-type: %s\r\nContent-language: en-US\r\n\r\n", ip,typ, date, file_size, typ);
+        sprintf(headers, "Host: %s\r\nAccept: %s\r\nConnection: close\r\nDate: %s\r\nContent-length: %d\r\nContent-type: %s\r\nContent-language: en-US\r\n\r\n", ip, typ, date, file_size, typ);
 
         // printf("%s\n",headers);
         // printf("Requesting %s from %s\n", url, ip);
         sprintf(request, "%s %s HTTP/1.1\r\n%s\r\n", method, url, headers);
-        printf("%s", request);
+        // printf("%s", request);
 
         struct sockaddr_in server_address;
         server_address.sin_family = AF_INET;
@@ -312,13 +324,13 @@ void send_request(const char *method, const char *url)
 
         send(client_socket, request, strlen(request), 0);
 
-        int remaining=file_size;
+        int remaining = file_size;
         char buffer[BUFSIZE];
         while (remaining > 0)
         {
             bzero(buffer, BUFSIZE);
             int to_send = (remaining > BUFSIZE) ? BUFSIZE : remaining;
-            
+
             fread(buffer, to_send, 1, file);
             // printf("%s\n", buffer);
             if (send(client_socket, buffer, to_send, 0) < 0)
@@ -330,8 +342,8 @@ void send_request(const char *method, const char *url)
         }
 
         parseS(client_socket);
+        ParseH(client_socket);
     }
-    
 
     close(client_socket);
 }
@@ -382,10 +394,9 @@ int ParseH(int sock)
             break;
         ptr++;
     }
-
     *ptr = 0;
     ptr = buff + 4;
-
+    printf("%s\n",ptr);
     if (bytes_received)
     {
         ptr = strstr(ptr, "Content-Length:");
