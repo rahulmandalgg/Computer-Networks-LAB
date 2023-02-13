@@ -87,6 +87,40 @@ void log_access(char *client_ip, int client_port)
     fclose(fp);
 }
 
+int ParseH(int sock)
+{
+    char c;
+    char buff[1024] = "", *ptr = buff + 4;
+    int bytes_received, status;
+
+    while (bytes_received = recv(sock, ptr, 1, 0))
+    {
+        if (bytes_received == -1)
+        {
+            perror("Parse Header");
+            exit(1);
+        }
+
+        if ((ptr[-3] == '\r') && (ptr[-2] == '\n') && (ptr[-1] == '\r') && (*ptr == '\n'))
+            break;
+        ptr++;
+    }
+    *ptr = 0;
+    ptr = buff + 4;
+    printf("%s\n",ptr);
+    if (bytes_received)
+    {
+        ptr = strstr(ptr, "Content-Length:");
+        if (ptr)
+        {
+            sscanf(ptr, "%*s %d", &bytes_received);
+        }
+        else
+            bytes_received = -1;
+    }
+    // printf("bytes recieved: %d\n",bytes_received);
+    return bytes_received;
+}
 
 int main()
 {
@@ -120,17 +154,20 @@ int main()
     printf("Connection accepted\n");
     int recsize,command_length=0;
     char* string;
-    strcpy(string,"");
-	while(recsize = recv(newsockfd, buff, 100, 0))
-    {
-        command_length = command_length + recsize;
-        strcat(string,buff);
-        if(buff[recsize-1] == '\0')
-        {
-            break;
-        }
-    }
-    printf("%s",string);
+    // strcpy(string,"");
+    ParseH(newsockfd);
+	// while(recsize = recv(newsockfd, buff, 100, 0))
+    // {
+        
+    //     command_length = command_length + recsize;
+    //     strcat(string,buff);
+    //     if(buff[recsize-1] == '\0')
+    //     {
+    //         break;
+    //     }
+    //     bzero(buff,100);
+    // }
+    
 
     char *method, *url, *headers, *version;
 
@@ -148,61 +185,61 @@ int main()
     gettime(date,30,3);
 
 
-    //GET command
-    if(strcmp(method,"GET") == 0)
-    {
-        FILE *file = fopen(url, "rb");
-        if (file == NULL)
-        {
-            sprintf(header_res,"%s 404 Not Found\nExpires: %s\nCache-Control: no-store\nContent-Language: en-US\n",version,date);
-            char* content = "Not Found";
-            if (stat(fil, &st) == -1) {
-                perror("stat");
-                return 1;
-            }
-            sprintf(modif, "%s", ctime(&st.st_mtime));
-            sprintf(response,"%s\nContent-Type: %s\nContent-Length: 9\nLast-Modified: %s\r\n\n%s",header_res,type,modif,content);
-            send(newsockfd, response, strlen(response), 0);
-        }
-        else
-        {   
-            sprintf(header_res,"%s 200 OK\nExpires: %s\nCache-Control: no-store\nContent-Language: en-US\n",version,date);
-            fseek(file, 0, SEEK_END);
-            long fileSize = ftell(file);
-            fseek(file, 0, SEEK_SET);
-            char* filecontent = malloc(fileSize + 1);
-            fread(filecontent, 1, fileSize, file);
-            if (stat(fil, &st) == -1) {
-                perror("stat");
-                return 1;
-            }
-            sprintf(modif, "%s", ctime(&st.st_mtime));
-            sprintf(response,"%s\nContent-Type: %s\nContent-Length:%ld\nLast-Modified: %s\r\n\n%s",header_res,type,fileSize,modif,filecontent);
-            send(newsockfd, response, strlen(response), 0);
-        }
-    }
+    // //GET command
+    // if(strcmp(method,"GET") == 0)
+    // {
+    //     FILE *file = fopen(url, "rb");
+    //     if (file == NULL)
+    //     {
+    //         sprintf(header_res,"%s 404 Not Found\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
+    //         char* content = "Not Found";
+    //         if (stat(fil, &st) == -1) {
+    //             perror("stat");
+    //             return 1;
+    //         }
+    //         sprintf(modif, "%s", ctime(&st.st_mtime));
+    //         sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\nLast-Modified: %s\r\n\r\n%s",header_res,type,modif,content);
+    //         send(newsockfd, response, strlen(response), 0);
+    //     }
+    //     else
+    //     {   
+    //         sprintf(header_res,"%s 200 OK\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
+    //         fseek(file, 0, SEEK_END);
+    //         long fileSize = ftell(file);
+    //         fseek(file, 0, SEEK_SET);
+    //         char* filecontent = malloc(fileSize + 1);
+    //         fread(filecontent, 1, fileSize, file);
+    //         if (stat(fil, &st) == -1) {
+    //             perror("stat");
+    //             return 1;
+    //         }
+    //         sprintf(modif, "%s", ctime(&st.st_mtime));
+    //         sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length:%ld\r\nLast-Modified: %s\r\n\r\n%s",header_res,type,fileSize,modif,filecontent);
+    //         send(newsockfd, response, strlen(response), 0);
+    //     }
+    // }
 
-    //PUT
-    else if(strcmp(method,"PUT") == 0)
-    {
+    // // PUT
+    // else if(strcmp(method,"PUT") == 0)
+    // {
 
-    }
+    // }
 
-    //other commands
-    else
-    {
-        sprintf(header_res,"%s 400 Not Bad Request\nExpires: %s\nCache-Control: no-store\nContent-Language: en-US\n",version,date);
-        char* content = "Bad Request";
-        if (stat(fil, &st) == -1)
-        {
-            perror("stat");
-            return 1;
-        }
-        sprintf(modif, "%s", ctime(&st.st_mtime));
-        sprintf(response,"%s\nContent-Type: %s\nContent-Length: 9\nLast-Modified: %s\r\n\n%s",header_res,type,modif,content);
-        send(newsockfd, response, strlen(response), 0);
-    }
-    log_access(inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+    // // other commands
+    // else
+    // {
+    //     sprintf(header_res,"%s 400 Not Bad Request\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
+    //     char* content = "Bad Request";
+    //     if (stat(fil, &st) == -1)
+    //     {
+    //         perror("stat");
+    //         return 1;
+    //     }
+    //     sprintf(modif, "%s", ctime(&st.st_mtime));
+    //     sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\r\nLast-Modified: %s\r\n\n%s",header_res,type,modif,content);
+    //     send(newsockfd, response, strlen(response), 0);
+    // }
+    // log_access(inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
     
     close(newsockfd);
 }
