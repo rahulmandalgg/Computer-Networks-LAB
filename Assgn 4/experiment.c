@@ -92,6 +92,41 @@ char* ParseH(int sock)
     return ptr;
 }
 
+int ParseHnum(int sock)
+{
+    char c;
+    char buff[1024] = "", *ptr = buff + 4;
+    int bytes_received, status;
+
+    while (bytes_received = recv(sock, ptr, 1, 0))
+    {
+        if (bytes_received == -1)
+        {
+            perror("Parse Header");
+            exit(1);
+        }
+
+        if ((ptr[-3] == '\r') && (ptr[-2] == '\n') && (ptr[-1] == '\r') && (*ptr == '\n'))
+            break;
+        ptr++;
+    }
+    *ptr = 0;
+    ptr = buff + 4;
+    printf("%s\n",ptr);
+    if (bytes_received)
+    {
+        ptr = strstr(ptr, "Content-Length:");
+        if (ptr)
+        {
+            sscanf(ptr, "%*s %d", &bytes_received);
+        }
+        else
+            bytes_received = -1;
+    }
+    // printf("bytes recieved: %d\n",bytes_received);
+    return bytes_received;
+}
+
 int parseS(int sock)
 {
     char c;
@@ -132,7 +167,7 @@ int main()
         printf("Socket creation(Server): Failed");
         exit(0);
     }
-    printf("Socket creation(Server): Success\n");
+    //printf("Socket creation(Server): Success\n");
 
     serveraddr.sin_family       = AF_INET;
     serveraddr.sin_port         = htons(PORT);
@@ -143,7 +178,7 @@ int main()
 		printf("Unable to bind local address\n");
 		exit(0);
 	}
-    printf("Binding: Success\n");
+    //printf("Binding: Success\n");
 
     listen(sockfd,5);
 
@@ -216,8 +251,6 @@ int main()
                 else
                 {
                     sprintf(header_res,"%s 403 Forbidden\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
-                    sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\r\nLast-Modified: \r\n\r\n",header_res,type);
-                    // send(newsockfd, response, strlen(response), 0);
                 }
                 sprintf(response,"%sContent-Type: %s\r\nContent-Length: %d\r\nLast-Modified: %s\r\n\r\n",header_res,type,file_size,modif);
                 printf("%s\n",response);
@@ -247,7 +280,7 @@ int main()
             FILE *file = fopen(fil, "wb");
             if (file == NULL)
             {
-                //printf("File Not found\n");
+                printf("File Not found\n");
                 sprintf(header_res,"%s 400 Bad Request\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
                 char* content = "Bad Request";
                 sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 11\r\nLast-Modified: \r\n\r\n%s",header_res,type,content);
@@ -255,34 +288,34 @@ int main()
             }
             else
             {   
-                //printf("File found\n");
+                printf("File found\n");
                 //body = ParseH(newsockfd);
-            int contentlength = 0;
-            int bytes_received = 0;
-                if (parseS(newsockfd) && (contentlength = ParseH(newsockfd)))
+                int contentlength = 0;
+                int bytes_received = 0;
+                if (parseS(newsockfd) && (contentlength = ParseHnum(newsockfd)))
                 {
-
                     int bytes = 0;
-
+                    printf("If check\n");
                     while (bytes_received = recv(newsockfd, response, 100, 0))
                     {
+                        printf("While check\n");
                         if (bytes_received == -1)
                         {
                             perror("receive");
                             exit(1);
                         }
-
+                        printf("%s",response);
                         fwrite(response, 1, bytes_received, file);
                         bytes += bytes_received;
                         if (bytes == contentlength)
                             break;
                     }
-                    fclose(file);
+                    
                 }
                 
                 if (!stat(fil, &st))
                 {   
-                    fwrite(string,sizeof(char),sizeof(string),file);
+                    //fwrite(string,sizeof(char),sizeof(string),file);
                     sprintf(header_res,"%s 200 OK\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
                     // printf("%s\n",header_res);
                     fseek(file, 0, SEEK_END);
@@ -296,11 +329,12 @@ int main()
                 }
                 else
                 {
-
+                    sprintf(header_res,"%s 403 Forbidden\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
                 }
                 sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length:%ld\r\nLast-Modified: %s\r\n\r\n",header_res,type,file_size,modif);
                 printf("%s\n",response);
                 send(newsockfd, response, strlen(response), 0);
+                fclose(file);
             }
         }
 
