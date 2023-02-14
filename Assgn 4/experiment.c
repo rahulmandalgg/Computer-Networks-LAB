@@ -12,6 +12,7 @@
 
 
 #define PORT 20000
+#define BUFSIZE 2048
 
 char *getFileType(char *file)
 {
@@ -91,6 +92,34 @@ char* ParseH(int sock)
     return ptr;
 }
 
+int parseS(int sock)
+{
+    char c;
+    char buff[1024] = "", *ptr = buff + 1;
+    int bytes_received, status;
+
+    while (bytes_received = recv(sock, ptr, 1, 0))
+    {
+        if (bytes_received == -1)
+        {
+            perror("Error in Reading HTTP Status");
+            exit(1);
+        }
+
+        if ((ptr[-1] == '\r') && (*ptr == '\n'))
+            break;
+        ptr++;
+    }
+    *ptr = 0;
+    ptr = buff + 1;
+
+    sscanf(ptr, "%*s %d ", &status);
+
+    printf("%s\n", ptr);
+
+    return (bytes_received > 0) ? status : 0;
+}
+
 int main()
 {
     int sockfd,newsockfd;
@@ -145,10 +174,11 @@ int main()
         //printf("Method: %s\n", method);
         char* type = getFileType(url);
         //printf("file type: %s\n",type);
-        char* response;
+        char response[200];
         char date[30],header_res[500],modif[30];
         struct stat st;
         char *fil = url + 1;
+        long file_size;
 
         //printf("%s\n",fil);
         gettime(date,30,3);
@@ -162,24 +192,23 @@ int main()
             FILE *file = fopen(fil, "rb");
             if (file == NULL)
             {
-                //printf("File Not found\n");
+                printf("File Not found\n");
                 sprintf(header_res,"%s 404 Not Found\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
                 char* content = "Not Found";
-                // sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\r\nLast-Modified: \r\n\r\n%s",header_res,type,content);
+                sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\r\nLast-Modified: \r\n\r\n%s",header_res,type,content);
                 // send(newsockfd, response, strlen(response), 0);
             }
             else
             {   
                 if (!stat(fil, &st))
                 {
-                    //printf("File found\n");
+                    printf("File found\n");
                     sprintf(header_res,"%s 200 OK\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
-                    // printf("%s\n",header_res);
+                    printf("%s\n",header_res);
                     fseek(file, 0, SEEK_END);
-                    long fileSize = ftell(file);
-                    fseek(file, 0, SEEK_SET);
-                    char* filecontent = malloc(fileSize + 1);
-                    fread(filecontent, 1, fileSize, file);
+                    file_size = ftell(file);
+                    rewind(file);
+                    
                     //printf("%s\n",filecontent);
                     strftime(modif, 100, "%d/%m/%Y %H:%M:%S", localtime( &st.st_mtime));
                     //printf("\nLast modified date and time = %s\n", modif);
@@ -187,12 +216,28 @@ int main()
                 else
                 {
                     sprintf(header_res,"%s 403 Forbidden\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
-                    // sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\r\nLast-Modified: \r\n\n%s",header_res,type,content);
+                    sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 9\r\nLast-Modified: \r\n\r\n",header_res,type);
                     // send(newsockfd, response, strlen(response), 0);
                 }
-                // sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length:%ld\r\nLast-Modified: %s\r\n\r\n%s",header_res,type,fileSize,modif,filecontent);
-                // printf("%s\n",response);
-                // send(newsockfd, response, strlen(response), 0);
+                sprintf(response,"%sContent-Type: %s\r\nContent-Length: %d\r\nLast-Modified: %s\r\n\r\n",header_res,type,file_size,modif);
+                printf("%s\n",response);
+                send(newsockfd, response, strlen(response), 0);
+                int remaining = file_size;
+                char buffer[BUFSIZE];
+                while (remaining > 0)
+                {
+                    bzero(buffer, BUFSIZE);
+                    int to_send = (remaining > BUFSIZE) ? BUFSIZE : remaining;
+
+                    fread(buffer, to_send, 1, file);
+                    // printf("%s\n", buffer);
+                    if (send(newsockfd, buffer, to_send, 0) < 0)
+                    {
+                        printf("Send failed");
+                        return 1;
+                    }
+                    remaining -= to_send;
+                }
             }
         }
 
@@ -205,13 +250,35 @@ int main()
                 //printf("File Not found\n");
                 sprintf(header_res,"%s 400 Bad Request\r\nExpires: %s\r\nCache-Control: no-store\r\nContent-Language: en-US\r\n",version,date);
                 char* content = "Bad Request";
-                // sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 11\r\nLast-Modified: \r\n\r\n%s",header_res,type,content);
-                // send(newsockfd, response, strlen(response), 0);
+                sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length: 11\r\nLast-Modified: \r\n\r\n%s",header_res,type,content);
+                send(newsockfd, response, strlen(response), 0);
             }
             else
             {   
                 //printf("File found\n");
-                body = ParseH(newsockfd);
+                //body = ParseH(newsockfd);
+            int contentlength = 0;
+            int bytes_received = 0;
+                if (parseS(newsockfd) && (contentlength = ParseH(newsockfd)))
+                {
+
+                    int bytes = 0;
+
+                    while (bytes_received = recv(newsockfd, response, 100, 0))
+                    {
+                        if (bytes_received == -1)
+                        {
+                            perror("receive");
+                            exit(1);
+                        }
+
+                        fwrite(response, 1, bytes_received, file);
+                        bytes += bytes_received;
+                        if (bytes == contentlength)
+                            break;
+                    }
+                    fclose(file);
+                }
                 
                 if (!stat(fil, &st))
                 {   
@@ -231,9 +298,9 @@ int main()
                 {
 
                 }
-                // sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length:%ld\r\nLast-Modified: %s\r\n\r\n%s",header_res,type,fileSize,modif,filecontent);
-                // printf("%s\n",response);
-                // send(newsockfd, response, strlen(response), 0);
+                sprintf(response,"%s\r\nContent-Type: %s\r\nContent-Length:%ld\r\nLast-Modified: %s\r\n\r\n",header_res,type,file_size,modif);
+                printf("%s\n",response);
+                send(newsockfd, response, strlen(response), 0);
             }
         }
 
