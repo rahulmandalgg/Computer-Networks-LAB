@@ -4,6 +4,40 @@ pthread_mutex_t mutex_RM,mutex_SM;
 
 S_MSG Send_Message[10];
 R_MSG Recv_Message[10];
+char buffer[1000];
+
+void *Thread_S(void *arg)
+{
+    while(1)
+    {
+        int i;
+        int sockfd = *(int *)arg;
+        int ret;
+        int count = 0;
+        while(1)
+        {
+            pthread_mutex_lock(&mutex_SM);
+            for(i=0;i<10;i++)
+            {
+                if(Send_Message[i].in_use == 1)
+                {
+                    while(1)
+                    {
+                        
+                    }
+                }
+            }
+            pthread_mutex_unlock(&mutex_SM);
+            if(count == 10)
+            {
+                break;
+            }
+        }
+        sleep(10);
+    }
+}
+
+
 
 int my_socket(int domain, int type, int protocol)
 {
