@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <errno.h>
+#include <signal.h>
 #include <pthread.h>
 
 #define SOCK_MyTCP 10
@@ -27,11 +29,11 @@ int my_close(int fd);
 
 typedef struct {
     int in_use;
-    char buffer[5000];
+    char *buffer;
 }S_MSG;
 
 typedef struct {
-    char buffer[5000];
+    char *buffer;
     int length;
     int in_use;
 }R_MSG;
