@@ -13,16 +13,28 @@
 #include <time.h>
 #include <pthread.h>
 
+#define SOCK_MyTCP 10
+pthread_t R, S;
+
 int my_socket(int domain, int type, int protocol);
 int my_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-int my_listen(int sockfd, int backlog);
+int my_listen(int sockfd, int num);
 int my_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 int my_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 size_t my_send(int sockfd, const void *buf, size_t len, int flags);
 size_t my_recv(int sockfd, void *buf, size_t len, int flags);
 int my_close(int fd);
 
+typedef struct {
+    int in_use;
+    char buffer[5000];
+}S_MSG;
 
+typedef struct {
+    char buffer[5000];
+    int length;
+    int in_use;
+}R_MSG;
 
 
 #endif
