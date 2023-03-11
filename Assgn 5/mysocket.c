@@ -4,7 +4,7 @@ pthread_mutex_t mutex_RM,mutex_SM;
 
 S_MSG Send_Message[10];
 R_MSG Recv_Message[10];
-char buffer[1000];
+char buffer[100];
 
 void *Thread_R(void *arg)
 {
@@ -85,6 +85,17 @@ int my_socket(int domain, int type, int protocol)
     {
         perror("socket");
         exit(1);
+    }
+
+    
+    for(int i=0;i<10;i++)
+    {
+        Recv_Message[i].in_use = 0;
+        Send_Message[i].in_use = 0;
+        Recv_Message[i].buffer = (char*)malloc(1000*sizeof(char));
+        Send_Message[i].buffer = (char*)malloc(1000*sizeof(char));
+        bzero(Recv_Message[i].buffer,1000);
+        bzero(Send_Message[i].buffer,1000);
     }
 
     pthread_attr_t attr;
