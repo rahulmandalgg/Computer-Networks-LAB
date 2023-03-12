@@ -29,11 +29,12 @@ int my_close(int fd);
 
 typedef struct {
     int in_use;
-    char *buffer;
+    char *smsg;
+    int length;
 }S_MSG;
 
 typedef struct {
-    char *buffer;
+    char *rmsg;
     int length;
     int in_use;
 }R_MSG;
