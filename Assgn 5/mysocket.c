@@ -249,6 +249,7 @@ size_t my_recv(int sockfd, void *buf, size_t length, int flags)
 
 int my_close(int sockfd)
 {
+    sleep(5);
     int ret;
     // free tables and kill threads
     pthread_kill(R, SIGHUP);
