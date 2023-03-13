@@ -25,7 +25,8 @@ int my_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 int my_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 size_t my_send(int sockfd, const void *buf, size_t len, int flags);
 size_t my_recv(int sockfd, void *buf, size_t len, int flags);
-int my_close(int fd);
+int my_close(int sockfd);
+int ParseH(int sockfd);
 
 typedef struct {
     int in_use;

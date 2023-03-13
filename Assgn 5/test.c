@@ -4,8 +4,11 @@
 
 int main()
 {
-    char c[1000] = "HELLO";
-    char l[1002];
-    sprintf(l,"NO%s",c);
-    printf("%s",l);
+
+    char msglen[1000];
+    sprintf(msglen,"%d\r\n",60);
+    printf("%s\n",msglen);
+    msglen[strlen(msglen)] = '\0';
+    // printf("%c",msglen[strlen(msglen)+1]);
+
 }
