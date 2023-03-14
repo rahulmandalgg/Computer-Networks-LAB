@@ -27,6 +27,8 @@ size_t my_send(int sockfd, const void *buf, size_t len, int flags);
 size_t my_recv(int sockfd, void *buf, size_t len, int flags);
 int my_close(int sockfd);
 int ParseH(int sockfd);
+void *Thread_R(void *arg);
+void *Thread_S(void *arg);
 
 typedef struct {
     int in_use;

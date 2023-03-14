@@ -1,14 +1,27 @@
 #include "mysocket.h"
 
-pthread_mutex_t mutex_RM, mutex_SM;
+pthread_mutex_t mutex_RM = PTHREAD_MUTEX_INITIALIZER, mutex_SM = PTHREAD_MUTEX_INITIALIZER, mutex_ACPT = PTHREAD_MUTEX_INITIALIZER;
 
 S_MSG Send_Message[10];
 R_MSG Recv_Message[10];
 char *send_buffer;
 char *recv_buffer;
+int myacpt = 0;
+int cnct = 0;
+int nsfd = 0;
 
 void *Thread_R(void *arg)
 {
+    while (1)
+    {
+        pthread_mutex_lock(&mutex_ACPT);
+        if (myacpt == 1 || cnct == 1)
+        {
+            pthread_mutex_unlock(&mutex_ACPT);
+            break;
+        }
+        sleep(2);
+    }
     while (1)
     {
         sleep(10);
@@ -19,6 +32,10 @@ void *Thread_R(void *arg)
         int contentlength = 0;
         int bytes_received = 0;
         char *ptr;
+        if (nsfd != 0)
+        {
+            sockfd = nsfd;
+        }
         while (1)
         {
             pthread_mutex_lock(&mutex_RM);
@@ -43,21 +60,30 @@ void *Thread_R(void *arg)
                             if (bytes == contentlength)
                                 break;
                         }
-                        fclose(sockfd);
                     }
                 }
+                count++;
             }
             pthread_mutex_unlock(&mutex_RM);
             if (count == 10)
-            {
                 break;
-            }
         }
     }
 }
 
 void *Thread_S(void *arg)
 {
+    while (1)
+    {
+        pthread_mutex_lock(&mutex_ACPT);
+        if (myacpt == 1 || cnct == 1)
+        {
+            pthread_mutex_unlock(&mutex_ACPT);
+            break;
+        }
+        sleep(2);
+    }
+
     char msglen[6];
 
     while (1)
@@ -69,7 +95,10 @@ void *Thread_S(void *arg)
         int count = 0;
 
         int remlen;
-
+        if (nsfd != 0)
+        {
+            sockfd = nsfd;
+        }
         while (1)
         {
             pthread_mutex_lock(&mutex_SM);
@@ -98,6 +127,7 @@ void *Thread_S(void *arg)
                 }
                 bzero(msglen, 6);
                 bzero(send_buffer, 1000);
+                count++;
             }
             pthread_mutex_unlock(&mutex_SM);
             if (count == 10)
@@ -125,6 +155,7 @@ int my_socket(int domain, int type, int protocol)
         perror("socket");
         exit(1);
     }
+    printf("Socket created successfully\n");
 
     send_buffer = (char *)malloc(1000 * sizeof(char));
     recv_buffer = (char *)malloc(1000 * sizeof(char));
@@ -156,6 +187,8 @@ int my_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         perror("bind");
         exit(1);
     }
+    printf("Bind successful\n");
+
     return ret;
 }
 
@@ -168,6 +201,7 @@ int my_listen(int sockfd, int num)
         perror("listen");
         exit(1);
     }
+    printf("Listening...\n");
     return ret;
 }
 
@@ -175,11 +209,16 @@ int my_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     int ret;
     ret = accept(sockfd, addr, addrlen);
+    nsfd = ret;
     if (ret < 0)
     {
         perror("accept");
         exit(1);
     }
+    printf("Connection Accepted\n");
+    pthread_mutex_lock(&mutex_ACPT);
+    myacpt = 1;
+    pthread_mutex_unlock(&mutex_ACPT);
     return ret;
 }
 
@@ -192,6 +231,10 @@ int my_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         perror("connect");
         exit(1);
     }
+    printf("Connection Established\n");
+    pthread_mutex_lock(&mutex_ACPT);
+    cnct = 1;
+    pthread_mutex_unlock(&mutex_ACPT);
     return ret;
 }
 
@@ -201,6 +244,8 @@ size_t my_send(int sockfd, const void *buf, size_t length, int flags)
     int i;
     int ret;
     int count = 0;
+    printf("SEND CALLED\n");
+    printf("Message to be sent:");
     while (1)
     {
         pthread_mutex_lock(&mutex_SM);
@@ -286,6 +331,6 @@ int ParseH(int sockfd)
     ptr[-1] = '\0';
     ptr = buff + 4;
     // printf("%s\n",ptr);
-    
+
     return bytes_received;
 }
