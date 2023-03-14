@@ -15,12 +15,14 @@ int main ()
     bzero(buffer, 1000);
 
     my_connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
-  
+
+    // printf("RETURNED FROM MY_CONNECT");
 
     my_recv(sockfd, buffer, 1000, 0);
+    printf("MESSAGE RECVD");
     my_send(sockfd, "Hello", 5, 0);
     printf("%s", buffer);
 
-    my_close(sockfd);
+    // my_close(sockfd);
 
 }

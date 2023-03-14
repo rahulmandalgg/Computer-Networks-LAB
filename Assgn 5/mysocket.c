@@ -8,10 +8,11 @@ char *send_buffer;
 char *recv_buffer;
 int myacpt = 0;
 int cnct = 0;
-int nsfd = 0;
+int nsfd = -1;
 
 void *Thread_R(void *arg)
 {
+    int sockfd = *(int *)arg;
     while (1)
     {
         pthread_mutex_lock(&mutex_ACPT);
@@ -20,28 +21,30 @@ void *Thread_R(void *arg)
             pthread_mutex_unlock(&mutex_ACPT);
             break;
         }
+        pthread_mutex_unlock(&mutex_ACPT);
         sleep(2);
+    }
+    if (nsfd >= 0)
+    {
+        sockfd = nsfd;
     }
     while (1)
     {
-        sleep(10);
+
         int i;
-        int sockfd = *(int *)arg;
+        
         int ret;
         int count = 0;
         int contentlength = 0;
         int bytes_received = 0;
         char *ptr;
-        if (nsfd != 0)
-        {
-            sockfd = nsfd;
-        }
+
         while (1)
         {
             pthread_mutex_lock(&mutex_RM);
             for (i = 0; i < 10; i++)
             {
-                if (Recv_Message[i].in_use == 1)
+                if (Recv_Message[i].in_use == 0)
                 {
                     if (contentlength = ParseH(sockfd))
                     {
@@ -68,11 +71,13 @@ void *Thread_R(void *arg)
             if (count == 10)
                 break;
         }
+        sleep(10);
     }
 }
 
 void *Thread_S(void *arg)
 {
+    int sockfd = *(int *)arg;
     while (1)
     {
         pthread_mutex_lock(&mutex_ACPT);
@@ -81,24 +86,22 @@ void *Thread_S(void *arg)
             pthread_mutex_unlock(&mutex_ACPT);
             break;
         }
+        pthread_mutex_unlock(&mutex_ACPT);
         sleep(2);
+    }
+    if (nsfd >= 0)
+    {
+        sockfd = nsfd;
     }
 
     char msglen[6];
 
     while (1)
     {
-
         int i;
-        int sockfd = *(int *)arg;
         int ret;
         int count = 0;
-
         int remlen;
-        if (nsfd != 0)
-        {
-            sockfd = nsfd;
-        }
         while (1)
         {
             pthread_mutex_lock(&mutex_SM);
@@ -106,15 +109,18 @@ void *Thread_S(void *arg)
             {
                 if (Send_Message[i].in_use == 1)
                 {
+                    // printf("Message to be sent inside thread:%s\n",Send_Message[i].smsg);
                     Send_Message[i].in_use = 0;
                     remlen = Send_Message[i].length;
                     sprintf(msglen, "%d\r\n", Send_Message[i].length);
                     msglen[strlen(msglen)] = '\0';
                     send(sockfd, msglen, strlen(msglen), 0);
+                    // printf("Message length sent:%s\n", msglen);
                     while (remlen > 0)
                     {
                         int to_send = (remlen > 1000) ? 1000 : remlen;
                         strncpy(send_buffer, Send_Message[i].smsg + (Send_Message[i].length - remlen), to_send);
+                        printf("SENT BUFFER:%s", send_buffer);
                         if (send(sockfd, send_buffer, to_send, 0) < 0)
                         {
                             perror("Send");
@@ -135,6 +141,7 @@ void *Thread_S(void *arg)
                 break;
             }
         }
+        // printf("Message sent successfully\n");
         bzero(msglen, 6);
         sleep(10);
     }
@@ -232,9 +239,7 @@ int my_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         exit(1);
     }
     printf("Connection Established\n");
-    pthread_mutex_lock(&mutex_ACPT);
     cnct = 1;
-    pthread_mutex_unlock(&mutex_ACPT);
     return ret;
 }
 
@@ -244,8 +249,7 @@ size_t my_send(int sockfd, const void *buf, size_t length, int flags)
     int i;
     int ret;
     int count = 0;
-    printf("SEND CALLED\n");
-    printf("Message to be sent:");
+
     while (1)
     {
         pthread_mutex_lock(&mutex_SM);
@@ -330,7 +334,7 @@ int ParseH(int sockfd)
     *ptr = '\0';
     ptr[-1] = '\0';
     ptr = buff + 4;
-    // printf("%s\n",ptr);
+    // printf("LENGTH:%s\n",ptr);
 
     return bytes_received;
 }

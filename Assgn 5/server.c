@@ -20,11 +20,14 @@ int main()
     int client_len = sizeof(client_addr);
     int newsockfd = my_accept(sockfd, (struct sockaddr *)&client_addr, &client_len);
     char *msg="Hello";
+    printf("SENDING HELLO\n");
     my_send(newsockfd, msg, 5, 0);
+    printf("Message sent\n");
     my_recv(newsockfd, buffer, 1000, 0);
+    printf("Message received\n");
     printf("%s", buffer);
 
-    my_close(sockfd);
+    // my_close(sockfd);
 
     return 0;
 }
