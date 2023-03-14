@@ -1,0 +1,19 @@
+mysocket.h
+Created two structs one for each "Send_Message" table and "Recieve_Message" table both has same type of variables ,
+int in_use : to check if that entry of table contains any data.
+int length : to store the length of message.
+char *(s/r)msg: to store messages.
+
+following functions are implemented:
+1. int my_socket : it basically creates the socket for communication it takes domain, type(SOCK_MyTCP), and protocol as arguments it allocates and initialize space for Send_Message and Recieve_Message Tables. It also creates the 2 Threads R and S, those helps in sending and recieving messages. It is similar to socket call.
+2. int my_bind : it is just the wrapper function of bind call. It performs the same function as bind.
+3. int my_listen : wrapper function to listen. Same function as listen.
+4. int my_accept : it is a wrapper function for accept call. Additional thing it does is it changes the value of global variable myacpt which we used in thread.
+5. int my_connect : it is also a simple wrapper function for connect call. It also modifies a global variable cnct which we used in thread.
+6. size_t my_send : this function checks the Send_Message table for free entries(in_use = 0) and if it finds a free entry it stores the message into that index in char *smsg which is already allocated some space.
+7. size_t my_recv : this function checks the Recieve_Message table for any filled entry(in_use = 1) and if it finds a filled entry it copies that message and store in buf pointer and frees that entry of table by performing necessary action.  
+8. int my_close : it first sleeps for 5 seconds and frees all the pointers and cleanup buffers and kill threads and then close the socket.
+9. int ParseH : this function finds the length of message which is recieved.
+10. Void *Thread_S : This thread handle the send part. So what it does is it waits for either the my_accept or my_connect call anyone of which changes the variable that satisifes the condition if the program is client or server. It uses mutex lock for that part. If the my_accept call is made it changes the sockfd to newsockfd. And it does not change if my_connect call is made. Then in loop it checks for any filled entry in Send_Message table and if it finds one it acquires the lock and header to message which contains "<message-length>/n/r" and copy all the message and send it to socket and clears the enty in table and releases the lock and then goes to sleep for 10 seconds. 
+11. Void *Thread_R : This thread handle the recieve part it basically first acquire the lock and check if my_accept or my_connect is called if anyone of them are then it releases lock and proceeds. It then in loop parses the header and extracts the length and recive the message in loop for that much length and saves it in a buffer. It then finds a free entry in Recieve_Message table and stores it in that entry with all fields then it goes to sleep for 10 seconds.
+

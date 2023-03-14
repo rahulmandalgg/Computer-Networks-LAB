@@ -24,53 +24,75 @@ void *Thread_R(void *arg)
         pthread_mutex_unlock(&mutex_ACPT);
         sleep(2);
     }
-    if (nsfd >= 0)
+    
+    if (myacpt == 1)
     {
         sockfd = nsfd;
     }
+
+    printf("SOCKFD in R Thread: %d\n",sockfd);
     while (1)
     {
 
         int i;
-        
+
         int ret;
         int count = 0;
         int contentlength = 0;
         int bytes_received = 0;
         char *ptr;
+        char bufr[1000];
+        bzero(recv_buffer, 5000);
+        bzero(bufr, 1000);      
+        
+        if (contentlength = ParseH(sockfd))
+        {
+            int bytes = 0;
+
+            while (bytes_received = recv(sockfd, bufr, 1000, 0))
+            {
+                
+                if (bytes_received == -1)
+                {
+                    perror("recieve");
+                    exit(1);
+                }
+
+                strncpy(recv_buffer + bytes, bufr, bytes_received);
+                
+                bytes += bytes_received;
+                if (bytes == contentlength)
+                    break;
+            }
+            recv_buffer[bytes] = '\0';
+            // printf("THREAD BUFFER:%s\n",recv_buffer);
+        }
 
         while (1)
         {
-            pthread_mutex_lock(&mutex_RM);
+            int flag = 0;
             for (i = 0; i < 10; i++)
             {
+                pthread_mutex_lock(&mutex_RM);
                 if (Recv_Message[i].in_use == 0)
                 {
-                    if (contentlength = ParseH(sockfd))
-                    {
-                        int bytes = 0;
-
-                        while (bytes_received = recv(sockfd, recv_buffer, 1000, 0))
-                        {
-                            if (bytes_received == -1)
-                            {
-                                perror("recieve");
-                                exit(1);
-                            }
-
-                            strncpy(Recv_Message[i].rmsg + bytes, recv_buffer, bytes_received);
-                            bytes += bytes_received;
-                            if (bytes == contentlength)
-                                break;
-                        }
-                    }
+                    Recv_Message[i].in_use = 1;
+                    bzero(Recv_Message[i].rmsg, 5000);
+                    strcpy(Recv_Message[i].rmsg, recv_buffer);
+                    Recv_Message[i].length = contentlength;
+                    pthread_mutex_unlock(&mutex_RM);
+                    // printf("DEBUGMSG:%s\n", Recv_Message[i].rmsg);
+                    flag=1;
+                    break;
                 }
+                pthread_mutex_unlock(&mutex_RM);
                 count++;
             }
-            pthread_mutex_unlock(&mutex_RM);
-            if (count == 10)
+
+            if (count == 10 || flag == 1)
                 break;
         }
+        
         sleep(10);
     }
 }
@@ -89,11 +111,11 @@ void *Thread_S(void *arg)
         pthread_mutex_unlock(&mutex_ACPT);
         sleep(2);
     }
-    if (nsfd >= 0)
+    if (myacpt == 1)
     {
         sockfd = nsfd;
     }
-
+    printf("SOCKFD in S Thread: %d\n",sockfd);
     char msglen[6];
 
     while (1)
@@ -120,14 +142,13 @@ void *Thread_S(void *arg)
                     {
                         int to_send = (remlen > 1000) ? 1000 : remlen;
                         strncpy(send_buffer, Send_Message[i].smsg + (Send_Message[i].length - remlen), to_send);
-                        printf("SENT BUFFER:%s", send_buffer);
                         if (send(sockfd, send_buffer, to_send, 0) < 0)
                         {
                             perror("Send");
                             exit(1);
                         }
                         remlen = remlen - to_send;
-                        bzero(send_buffer, 1000);
+                        bzero(send_buffer, 5000);
                     }
                     bzero(Send_Message[i].smsg, 5000);
                 }
@@ -157,6 +178,7 @@ int my_socket(int domain, int type, int protocol)
     int sockfd;
     sockfd = socket(domain, SOCK_STREAM, protocol);
 
+    printf("SOCKFD: %d\n",sockfd);
     if (sockfd < 0)
     {
         perror("socket");
@@ -164,8 +186,8 @@ int my_socket(int domain, int type, int protocol)
     }
     printf("Socket created successfully\n");
 
-    send_buffer = (char *)malloc(1000 * sizeof(char));
-    recv_buffer = (char *)malloc(1000 * sizeof(char));
+    send_buffer = (char *)malloc(5000 * sizeof(char));
+    recv_buffer = (char *)malloc(5000 * sizeof(char));
 
     for (int i = 0; i < 10; i++)
     {
@@ -239,7 +261,9 @@ int my_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         exit(1);
     }
     printf("Connection Established\n");
+    pthread_mutex_lock(&mutex_ACPT);
     cnct = 1;
+    pthread_mutex_unlock(&mutex_ACPT);
     return ret;
 }
 
@@ -301,6 +325,13 @@ int my_close(int sockfd)
     sleep(5);
     int ret;
     // free tables and kill threads
+    free(send_buffer);
+    free(recv_buffer);
+    for (int i = 0; i < 10; i++)
+    {
+        free(Recv_Message[i].rmsg);
+        free(Send_Message[i].smsg);
+    }
     pthread_kill(R, SIGHUP);
     pthread_kill(S, SIGHUP);
 
