@@ -1,4 +1,7 @@
-gcc client.c -fsanitize=thread -o client -L. -lmsocket -lpthreads
+gcc server.c -o server -pthreads -L. -lmsocket
+./server
 
-gcc server.c -fsanitize=thread -o server -L. -lmsocket -lpthreads
+gcc client.c -o client -pthreads -L. -lmsocket
+./client
+
 
