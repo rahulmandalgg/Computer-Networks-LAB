@@ -5,4 +5,4 @@ mysocket.o: mysocket.c mysocket.h
 	gcc -c mysocket.c -o mysocket.o -lpthread
 
 clean:
-	rm -f mysocket.o libmsocket.a 
+	rm -f mysocket.o libmsocket.a

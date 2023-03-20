@@ -12,7 +12,7 @@ int nsfd = -1;
 
 void *Thread_R(void *arg)
 {
-    int sockfd = *(int *)arg;
+    int sockfd = *((int *)arg);
     while (1)
     {
         pthread_mutex_lock(&mutex_ACPT);
@@ -24,34 +24,30 @@ void *Thread_R(void *arg)
         pthread_mutex_unlock(&mutex_ACPT);
         sleep(2);
     }
-    
+
     if (myacpt == 1)
     {
         sockfd = nsfd;
     }
 
-    printf("SOCKFD in R Thread: %d\n",sockfd);
     while (1)
     {
 
         int i;
-
-        int ret;
-        int count = 0;
         int contentlength = 0;
         int bytes_received = 0;
         char *ptr;
         char bufr[1000];
         bzero(recv_buffer, 5000);
-        bzero(bufr, 1000);      
-        
+        bzero(bufr, 1000);
+
         if (contentlength = ParseH(sockfd))
         {
             int bytes = 0;
 
             while (bytes_received = recv(sockfd, bufr, 1000, 0))
             {
-                
+                // printf("BYTES RECVD and Content Length:%d %d\n", bytes_received, contentlength);
                 if (bytes_received == -1)
                 {
                     perror("recieve");
@@ -59,47 +55,44 @@ void *Thread_R(void *arg)
                 }
 
                 strncpy(recv_buffer + bytes, bufr, bytes_received);
-                
+
                 bytes += bytes_received;
                 if (bytes == contentlength)
                     break;
             }
             recv_buffer[bytes] = '\0';
-            // printf("THREAD BUFFER:%s\n",recv_buffer);
+            // printf("THREAD BUFFER:%s\n", recv_buffer);
         }
-
-        while (1)
+        // printf("PARSED HEADER\n");
+        if (contentlength > 0)
         {
-            int flag = 0;
             for (i = 0; i < 10; i++)
             {
                 pthread_mutex_lock(&mutex_RM);
                 if (Recv_Message[i].in_use == 0)
                 {
                     Recv_Message[i].in_use = 1;
-                    bzero(Recv_Message[i].rmsg, 5000);
                     strcpy(Recv_Message[i].rmsg, recv_buffer);
                     Recv_Message[i].length = contentlength;
+                    // printf("MSG SAVED IN TABLE %d\n",i);
                     pthread_mutex_unlock(&mutex_RM);
                     // printf("DEBUGMSG:%s\n", Recv_Message[i].rmsg);
-                    flag=1;
                     break;
                 }
-                pthread_mutex_unlock(&mutex_RM);
-                count++;
+                else
+                {
+                    pthread_mutex_unlock(&mutex_RM);
+                }
             }
-
-            if (count == 10 || flag == 1)
-                break;
         }
-        
-        sleep(10);
+
+        sleep(2);
     }
 }
 
 void *Thread_S(void *arg)
 {
-    int sockfd = *(int *)arg;
+    int sockfd = *((int *)arg);
     while (1)
     {
         pthread_mutex_lock(&mutex_ACPT);
@@ -111,11 +104,12 @@ void *Thread_S(void *arg)
         pthread_mutex_unlock(&mutex_ACPT);
         sleep(2);
     }
+
     if (myacpt == 1)
     {
         sockfd = nsfd;
     }
-    printf("SOCKFD in S Thread: %d\n",sockfd);
+
     char msglen[6];
 
     while (1)
@@ -124,15 +118,21 @@ void *Thread_S(void *arg)
         int ret;
         int count = 0;
         int remlen;
+        int flag = 0;
+        
+        // printf("OUTER LOOP\n");
         while (1)
         {
+            // printf("in_use of 1:%d\n",Send_Message[1].in_use);
             pthread_mutex_lock(&mutex_SM);
             for (i = 0; i < 10; i++)
             {
+                
                 if (Send_Message[i].in_use == 1)
                 {
+                    // printf("i: %d\n",i);
+                    
                     // printf("Message to be sent inside thread:%s\n",Send_Message[i].smsg);
-                    Send_Message[i].in_use = 0;
                     remlen = Send_Message[i].length;
                     sprintf(msglen, "%d\r\n", Send_Message[i].length);
                     msglen[strlen(msglen)] = '\0';
@@ -148,23 +148,33 @@ void *Thread_S(void *arg)
                             exit(1);
                         }
                         remlen = remlen - to_send;
+                        // printf("%d---Message sent:\n", i);
                         bzero(send_buffer, 5000);
                     }
                     bzero(Send_Message[i].smsg, 5000);
+                    Send_Message[i].in_use = 0;
+                    flag = 1;
                 }
+                // printf("MSGSENT\n");
                 bzero(msglen, 6);
                 bzero(send_buffer, 1000);
                 count++;
+                if (flag == 1)
+                {
+                    break;
+                }
             }
             pthread_mutex_unlock(&mutex_SM);
-            if (count == 10)
+            if (count == 10 || flag == 1)
             {
                 break;
             }
+            
         }
         // printf("Message sent successfully\n");
+
         bzero(msglen, 6);
-        sleep(10);
+        sleep(2);
     }
 }
 
@@ -178,7 +188,7 @@ int my_socket(int domain, int type, int protocol)
     int sockfd;
     sockfd = socket(domain, SOCK_STREAM, protocol);
 
-    printf("SOCKFD: %d\n",sockfd);
+    // printf("SOCKFD: %d\n", sockfd);
     if (sockfd < 0)
     {
         perror("socket");
@@ -188,6 +198,9 @@ int my_socket(int domain, int type, int protocol)
 
     send_buffer = (char *)malloc(5000 * sizeof(char));
     recv_buffer = (char *)malloc(5000 * sizeof(char));
+
+    int *sfd = (int *)malloc(sizeof(*sfd));
+    *sfd = sockfd;
 
     for (int i = 0; i < 10; i++)
     {
@@ -201,8 +214,8 @@ int my_socket(int domain, int type, int protocol)
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
-    pthread_create(&R, &attr, Thread_R, (void *)&sockfd);
-    pthread_create(&S, &attr, Thread_S, (void *)&sockfd);
+    pthread_create(&R, &attr, Thread_R, sfd);
+    pthread_create(&S, &attr, Thread_S, sfd);
 
     return sockfd;
 }
@@ -281,16 +294,16 @@ size_t my_send(int sockfd, const void *buf, size_t length, int flags)
         {
             if (Send_Message[i].in_use == 0)
             {
+                // printf("MESSAGE ADDED TO SEND MESSAGE TABLE %d\n",i);
                 Send_Message[i].in_use = 1;
-                strncpy(Send_Message[i].smsg, buf, strlen(buf));
-                Send_Message[i].smsg[strlen(buf)] = '\0';
-                Send_Message[i].length = strlen(buf);
+                strncpy(Send_Message[i].smsg, buf, length);
+                Send_Message[i].smsg[length] = '\0';
+                Send_Message[i].length = length;
                 pthread_mutex_unlock(&mutex_SM);
-                return strlen(buf);
+                return length;
             }
         }
         pthread_mutex_unlock(&mutex_SM);
-        sleep(2);
     }
 }
 
@@ -308,9 +321,9 @@ size_t my_recv(int sockfd, void *buf, size_t length, int flags)
             if (Recv_Message[i].in_use == 1)
             {
                 strncpy(buf, Recv_Message[i].rmsg, length);
-                Recv_Message[i].in_use = 0;
                 bzero(Recv_Message[i].rmsg, 5000);
                 Recv_Message[i].length = 0;
+                Recv_Message[i].in_use = 0;
                 pthread_mutex_unlock(&mutex_RM);
                 return (strlen(buf));
             }
@@ -322,7 +335,7 @@ size_t my_recv(int sockfd, void *buf, size_t length, int flags)
 
 int my_close(int sockfd)
 {
-    sleep(5);
+    sleep(10);
     int ret;
     // free tables and kill threads
     free(send_buffer);
@@ -366,6 +379,6 @@ int ParseH(int sockfd)
     ptr[-1] = '\0';
     ptr = buff + 4;
     // printf("LENGTH:%s\n",ptr);
-
+    bytes_received = atoi(ptr);
     return bytes_received;
 }
