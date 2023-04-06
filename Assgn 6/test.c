@@ -6,6 +6,7 @@ int main(int argc, char *argv[])
 {
     char *hostname = "www.facebook.com";
     struct hostent *he;
+
     struct in_addr **addr_list;
     int i;
 
