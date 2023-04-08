@@ -8,10 +8,12 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <unistd.h>
+#include <time.h>
+#include <sys/time.h>
 #include <netdb.h>
 
 #define PACKET_SIZE 64
-#define MAX_HOPS 10
+#define MAX_HOPS 16
 
 // Calculate ICMP checksum
 unsigned short calculateChecksum(unsigned short *buffer, int length)
@@ -33,11 +35,23 @@ unsigned short calculateChecksum(unsigned short *buffer, int length)
     return ~sum;
 }
 
+// delay function
+void delay(int milliseconds)
+{
+    long pause;
+    clock_t now, then;
+
+    pause = milliseconds * (CLOCKS_PER_SEC / 1000);
+    now = then = clock();
+    while ((now - then) < pause)
+        now = clock();
+}
+
 int main(int argc, char *argv[])
 {
     if (argc != 2)
     {
-        printf("Usage: %s <destination_dns>\n", argv[0]);
+        printf("Usage: %s <destination_dns> <no_of_times_to_probe> <time_between_2_probes>\n", argv[0]);
         return 1;
     }
 
@@ -49,9 +63,13 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    // int n = atoi(argv[2]);
+    // int t = atoi(argv[3]);
+
     struct sockaddr_in destAddr;
     struct sockaddr_in recvAddr;
     struct sockaddr_in srcAddr;
+    struct sockaddr_in intmnodes[MAX_HOPS+1];
     socklen_t addrLen = sizeof(recvAddr);
     int sockfd;
     char packet[PACKET_SIZE];
@@ -60,6 +78,8 @@ int main(int argc, char *argv[])
     int ttl = 1;
     int maxHops = MAX_HOPS;
     int seq = 0;
+    int typ;
+    srand(time(NULL));
 
     char resolvedIP[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, host->h_addr_list[0], resolvedIP, INET_ADDRSTRLEN);
@@ -87,6 +107,8 @@ int main(int argc, char *argv[])
     }
 
     printf("Traceroute to %s (%s)\n", argv[1], resolvedIP);
+
+
 
     while (1)
     {
@@ -126,25 +148,25 @@ int main(int argc, char *argv[])
         struct iphdr *ipHeader = (struct iphdr *)packet;
         struct icmphdr *icmp_Header = (struct icmphdr *)(packet + sizeof(struct iphdr));
 
-        memset(data,0,sizeof(data));
-        // strcpy(data, "Hello World");
-        // memcpy(packet + sizeof(struct iphdr) + sizeof(struct icmphdr), data, sizeof(data));
+        memset(data, 0, sizeof(data));
+        strcpy(data, "Hello World");
+        memcpy(packet + sizeof(struct iphdr) + sizeof(struct icmphdr), data, sizeof(data));
 
         // Set IP header
         ipHeader->ihl = 5;
         ipHeader->version = 4;
         ipHeader->tos = 0;
-        // ipHeader->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmphdr) + sizeof(data));
-        ipHeader->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmphdr));
-        ipHeader->id = rand()%1000;
+        ipHeader->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmphdr) + sizeof(data));
+        // ipHeader->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmphdr));
+        ipHeader->id = rand() % 1000;
         ipHeader->frag_off = 0;
         ipHeader->ttl = ttl;
         ipHeader->protocol = IPPROTO_ICMP;
         ipHeader->check = 0;
         ipHeader->saddr = srcAddr.sin_addr.s_addr;
         ipHeader->daddr = destAddr.sin_addr.s_addr;
-        
-        ipHeader->check = calculateChecksum((unsigned short*)ipHeader, sizeof(struct iphdr));
+
+        ipHeader->check = calculateChecksum((unsigned short *)ipHeader, sizeof(struct iphdr));
 
         // Set ICMP header
         icmp_Header->type = ICMP_ECHO;
@@ -152,64 +174,116 @@ int main(int argc, char *argv[])
         icmp_Header->un.echo.id = 0;
         icmp_Header->un.echo.sequence = seq++;
         icmp_Header->checksum = 0;
-        // icmp_Header->checksum = calculateChecksum((unsigned short *)icmp_Header, sizeof(struct icmphdr) + sizeof(data));
-        icmp_Header->checksum = calculateChecksum((unsigned short *)icmp_Header, sizeof(struct icmphdr));
+        icmp_Header->checksum = calculateChecksum((unsigned short *)icmp_Header, sizeof(struct icmphdr) + sizeof(data));
+        // icmp_Header->checksum = calculateChecksum((unsigned short *)icmp_Header, sizeof(struct icmphdr));
 
+        double tmptime[16];
+        double intmtime[16];
+        int flag=0;
 
-        // Send ICMP packet
-        if (sendto(sockfd, packet, PACKET_SIZE, 0, (struct sockaddr *)&destAddr, sizeof(destAddr)) == -1)
+        for (int i = 0; i < 5; i++)
         {
-            perror("sendto");
-            return 1;
-        }
 
-        int select_retval;
-        select_retval = select(sockfd + 1, &readfds, NULL, NULL, &timeout);
 
-        if (select_retval == -1)
-        {
-            perror("Failed to select");
-            return 1;
-        }
-        else if (select_retval == 0)
-        {
-            printf("%d. *\n", ttl);
-            ttl++;
-            if (ttl >= maxHops)
+            // Send ICMP packet
+            if (sendto(sockfd, packet, PACKET_SIZE, 0, (struct sockaddr *)&destAddr, sizeof(destAddr)) == -1)
             {
-                printf("Maximum hops reached\n");
+                perror("sendto");
+                return 1;
+            }
+
+            int select_retval;
+            select_retval = select(sockfd + 1, &readfds, NULL, NULL, &timeout);
+
+            if (select_retval == -1)
+            {
+                perror("Failed to select");
+                return 1;
+            }
+            else if (select_retval == 0)
+            {
+                printf("TTL: %d. *\n", ttl);
+                if (ttl >= maxHops)
+                {
+                    printf("Maximum hops reached\n");
+                    break;
+                }
+                continue;
+            }
+
+            // Wait for ICMP Echo Reply
+            if (recvfrom(sockfd, recvBuffer, PACKET_SIZE, 0, (struct sockaddr *)&recvAddr, &addrLen) == -1)
+            {
+                perror("recvfrom");
+                return 1;
+            }
+           
+
+            // Extract IP header and ICMP header from received packet
+            struct iphdr *ip_recv = (struct iphdr *)recvBuffer;
+            struct icmphdr *icmp_recv = (struct icmphdr *)(recvBuffer + 20);
+
+            // Extract source IP address from received packet
+            char srcAddr[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &(recvAddr.sin_addr), srcAddr, INET_ADDRSTRLEN);
+
+            // Print hop information
+            printf("TTL: %d. IP: %s, ", ttl, srcAddr);
+            printf("Type: %d, Checksum: %d\n", icmp_recv->type, icmp_recv->checksum);
+            
+
+            typ = icmp_recv->type;
+
+            // Check if the received packet is an ICMP Echo Reply
+            if (typ == ICMP_ECHOREPLY)
+            {
+                printf("Data: %s\n", recvBuffer + + sizeof(struct iphdr) + sizeof(struct icmphdr));
+                flag=1;
                 break;
             }
-            continue;
+            else if (typ == ICMP_TIME_EXCEEDED)
+            {
+                // do nothing
+            }
+            else if (typ == ICMP_DEST_UNREACH)
+            {
+                // do nothing
+            }
+            else
+            {
+                // check for data in the packet
+                char *ptr = recvBuffer + 20 + sizeof(struct icmphdr);
+                if (ptr != NULL)
+                {
+                    if (ip_recv->protocol == IPPROTO_TCP)
+                    {
+                        printf("TCP packet\n");
+                    }
+                    else if (ip_recv->protocol == IPPROTO_UDP)
+                    {
+                        printf("UDP packet\n");
+                    }
+                    else
+                    {
+                        printf("Unknown Protocol\n");
+                    }
+                    printf("Data: %s", ptr);
+                }
+            }
+
+            delay(1000);
         }
-
-        // Wait for ICMP Echo Reply
-        if (recvfrom(sockfd, recvBuffer, PACKET_SIZE, 0, (struct sockaddr *)&recvAddr, &addrLen) == -1)
-        {
-            perror("recvfrom");
-            return 1;
-        }
-
-        // Extract IP header and ICMP header from received packet
-        struct iphdr *ip_recv = (struct iphdr *)recvBuffer;
-        struct icmphdr *icmp_recv = (struct icmphdr *)(recvBuffer + 20);
-
-        // Extract source IP address from received packet
-        char srcAddr[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(recvAddr.sin_addr), srcAddr, INET_ADDRSTRLEN);
-
-        // Print hop information
-        printf("ID: %d\n", icmp_recv->un.echo.id);
-        printf("TTL: %d. IP: %s, SEQ NO: %d\n", ttl, srcAddr, icmp_recv->un.echo.sequence);
-        printf("Type: %d, Code: %d, Checksum: %d\n", icmp_recv->type, icmp_recv->code, icmp_recv->checksum);
         printf("\n");
 
-        // Check if the received packet is an ICMP Echo Reply
-        if (icmp_recv->type == ICMP_ECHOREPLY)
+        // printf("ttime:%f\n",tmptime[ttl]);
+
+        if (typ == ICMP_ECHOREPLY)
         {
             printf("Reached destination\n");
+            // print intermediate times
             break;
         }
+
         // Check if maximum hops reached
         if (ttl >= maxHops)
         {
@@ -220,6 +294,12 @@ int main(int argc, char *argv[])
         // Increment TTL for next hop
         ttl++;
     }
+
+    // while(1)
+    // {
+        //left to do
+    // }
+    
 
     // Close socket
     close(sockfd);
