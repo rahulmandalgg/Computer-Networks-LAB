@@ -563,7 +563,7 @@ int main(int argc, char *argv[])
 
                 // set data
                 memset(dat, 0, sizeof(dat));
-                strcpy(dat, "Don't forget that gifts often come with costs that go beyond their purchase price. When you purchase a child the latest smartphone, you're also committing to a monthly phone bill. When you purchase the latest gaming system, you're likely not going to be satisfied with the games that come with it for long and want to purchase new titles to play.\0");
+                strcpy(dat, "This message is longer than the previous message\0");
 
                 printf("Bytes of data: %ld\n", sizeof(dat));
 
